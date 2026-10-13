@@ -1,0 +1,11 @@
+module PlayableSoccer
+{
+    item SportsSoccerBall
+    {
+        DisplayCategory = Sports,
+        ItemType = base:normal,
+        Weight = 1.0,
+        Icon = SoccerBall,
+        WorldStaticModel = SoccerBall,
+    }
+}

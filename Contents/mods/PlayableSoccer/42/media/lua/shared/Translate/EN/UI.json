@@ -1,0 +1,10 @@
+{
+  "UI_PS_NoServer": "Soccer practice is not available yet.",
+  "UI_PS_JoinBall": "Play with nearby soccer ball",
+  "UI_PS_LeaveBall": "Leave soccer controls",
+  "UI_PS_StopBall": "End my soccer practice",
+  "UI_PS_Controls": "Soccer: hold LMB to charge, release to kick; RMB cancels. Right-click to leave or end practice.",
+  "UI_PS_RenderError": "The soccer ball could not be displayed. Check that 3D ground items are enabled; you can end practice from the right-click menu.",
+  "UI_PS_TooManyBalls": "The server has reached the practice ball limit. End an existing practice first.",
+  "UI_PS_StartFailed": "Practice did not start. Keep the sports ball in your main inventory and stand on clear ground."
+}
