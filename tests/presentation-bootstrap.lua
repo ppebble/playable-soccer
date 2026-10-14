@@ -24,4 +24,5 @@ function PSClient.notice(key) PSClient.message=key;PSClient.messageUntil=TEST.ti
 function PSClient.blocked() return TEST.blocked end
 function PSClient.send(command,args) TEST.commands[#TEST.commands+1]={command=command,args=args} end
 TEST.panel={drawRect=function(self,x,y,w,h,a,r,g,b) TEST.draws[#TEST.draws+1]={x=x,y=y,w=w,h=h} end,
+drawProgressBar=function(self,x,y,w,h,f,color) TEST.bar={x=x,y=y,w=w,h=h,power=f,color=color} end,
 drawTextCentre=function(self,text,x,y) TEST.texts[#TEST.texts+1]={text=text,x=x,y=y} end}

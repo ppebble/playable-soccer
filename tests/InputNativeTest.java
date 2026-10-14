@@ -57,6 +57,10 @@ public final class InputNativeTest {
                 assert(PSClient.overlay.width==1600 and PSClient.overlay.height==900)
                 assert(TEST.hudRendered)
                 local ui=PSClient.overlay
+                local rects={}
+                ui.drawRect=function(self,x,y,w,h) rects[#rects+1]={x=x,w=w,h=h} end
+                ui:drawProgressBar(10,20,300,18,.5,{a=1,r=1,g=1,b=1})
+                assert(#rects==2 and rects[1].w==150 and rects[2].x==160 and rects[2].w==150)
                 assert(ui.javaObject.setWantKeyEventsValue==true)
                 local esc=Keyboard.KEY_ESCAPE
                 PSClient.selected=1

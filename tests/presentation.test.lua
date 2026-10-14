@@ -30,11 +30,17 @@ PSHUD.render(TEST.panel,PSClient)
 local title,bar,message=false,false,false
 for _,t in ipairs(TEST.texts) do
     if t.text=="UI_PS_Practice" then title=t.x==640 and t.y==30 end
-    if t.text=="hello" then message=t.x==640 and t.y==148 end
+    if t.text=="hello" then message=t.x==640 and t.y==178 end
 end
-for _,d in ipairs(TEST.draws) do if d.x==520 and d.y==95 and d.w==120 then bar=true end end
+bar=TEST.bar.x==490 and TEST.bar.y==95 and TEST.bar.w==300 and TEST.bar.power==.5
 check(title and message,"title and message twelve o'clock")
 check(bar,"half-charge visible at top center")
+PSClient.charge.at=TEST.time-900;PSHUD.render(TEST.panel,PSClient)
+check(TEST.bar.power==1 and TEST.bar.color.r==1,"full charge uses maximum color")
+PSClient.charge.at=TEST.time-9000;PSHUD.render(TEST.panel,PSClient)
+check(TEST.bar.power==1,"holding beyond maximum never overfills")
+PSClient.charge=nil;PSHUD.render(TEST.panel,PSClient)
+check(TEST.bar.power==0,"idle gauge remains visible empty")
 TEST.draws={};TEST.ball.h=.6
 PSHUD.render(TEST.panel,PSClient)
 local floorShadow,airGuide=false,false

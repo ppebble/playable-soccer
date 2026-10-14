@@ -7,6 +7,10 @@ C.airDrag = 1.8
 C.kickRange = 1.4
 C.dribbleRange = .8
 C.dribblePower = 0
+C.chargeMilliseconds = 900
+function C.chargePower(elapsed)
+    return math.min(1,math.max(0,elapsed/C.chargeMilliseconds))
+end
 -- x/y use horizontal tile units; h/vz use world floor units. One rendered
 -- floor spans approximately three horizontal tiles vertically.
 C.tilesPerFloor = 3

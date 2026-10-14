@@ -23,5 +23,8 @@
   "UI_PS_GoalsInvalid": "Invalid goals: clear ground, width 2-10 tiles, opposing mouths, center at least 2 tiles inside each; stand within 40 tiles of every point.",
   "UI_PS_GoalsReady": "Goals set. Choose a team from the soccer menu after leaving controls with Esc.",
   "UI_PS_BallReset": "Ball returned to the center.",
-  "UI_PS_LineInvalid": "Goal lines must be 2–10 tiles long. Choose the endpoint again."
+  "UI_PS_LineInvalid": "Goal lines must be 2–10 tiles long. Choose the endpoint again.",
+  "UI_PS_ChargeReady": "Kick power · hold a mouse button",
+  "UI_PS_ChargeMax": "MAX · release to kick",
+  "UI_PS_ChargeRange": "Full charge: 0.9s · max kick: about 18–20 tiles on level ground"
 }

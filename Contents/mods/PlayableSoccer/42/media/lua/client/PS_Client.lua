@@ -180,7 +180,7 @@ function C.update(p)
                 local x,y=PSProjection.screenToWorld(0,getMouseX(),getMouseY(),b.z)
                 if PSCore.finite(x) and PSCore.finite(y) then
                     C.lastTouch=t
-                    C.send("kick",{id=b.id,dx=x-b.x,dy=y-b.y,lob=charge.lob,power=math.min(1,math.max(0,(now()-charge.at)/900))})
+                    C.send("kick",{id=b.id,dx=x-b.x,dy=y-b.y,lob=charge.lob,power=PSCore.chargePower(now()-charge.at)})
                 end
             end
         end

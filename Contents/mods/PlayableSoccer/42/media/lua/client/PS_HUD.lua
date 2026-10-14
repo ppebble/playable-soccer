@@ -1,4 +1,5 @@
 require "PS_Projection"
+require "PS_Core"
 require "PS_Setup"
 PSHUD={}
 local H=PSHUD
@@ -22,21 +23,27 @@ function H.render(panel,C)
     local selected=C.ball(C.selected)
     local width=math.min(720,getCore():getScreenWidth()-32)
     if selected then
-        panel:drawRect(cx-width/2,24,width,98,.82,.04,.07,.09)
+        panel:drawRect(cx-width/2,24,width,142,.82,.04,.07,.09)
         local m=selected.match
         local title=m and ("A  "..tostring(m.scoreA).."  :  "..tostring(m.scoreB).."  B") or getText("UI_PS_Practice")
         panel:drawTextCentre(title,cx,30,1,.95,.78,1,UIFont.Large)
         local detail=m and m.phase=="goal" and getText("UI_PS_Goal",m.lastScoringTeam or "") or getText("UI_PS_Controls")
         panel:drawTextCentre(detail,cx,65,.7,.9,1,1,UIFont.Small)
+        local power=C.charge and PSCore.chargePower(getTimestampMs()-C.charge.at) or 0
+        local barWidth=math.min(300,width-24)
+        local color=power>=1 and {a=1,r=1,g=.75,b=.2} or {a=1,r=.25,g=.8,b=.35}
+        panel:drawRect(cx-barWidth/2-1,94,barWidth+2,20,1,.65,.65,.65)
+        panel:drawProgressBar(cx-barWidth/2,95,barWidth,18,power,color)
+        local label=getText("UI_PS_ChargeReady")
         if C.charge then
-            local power=math.min(1,math.max(0,(getTimestampMs()-C.charge.at)/900))
-            panel:drawRect(cx-121,94,242,16,.9,0,0,0)
-            panel:drawRect(cx-120,95,240*power,14,1,.25,.8,.35)
-            panel:drawTextCentre(getText(C.charge.lob and "UI_PS_Lob" or "UI_PS_Ground"),cx,124,1,1,1,1,UIFont.Small)
+            label=getText(C.charge.lob and "UI_PS_Lob" or "UI_PS_Ground").."  "..tostring(math.floor(power*100)).."%"
+            if power>=1 then label=label.."  "..getText("UI_PS_ChargeMax") end
         end
+        panel:drawTextCentre(label,cx,116,1,1,1,1,UIFont.Small)
+        panel:drawTextCentre(getText("UI_PS_ChargeRange"),cx,140,.8,.85,.9,1,UIFont.Small)
     end
     if C.message and getTimestampMs()<(C.messageUntil or 0) then
-        panel:drawTextCentre(C.message,cx,selected and 148 or 30,1,.85,.4,1,UIFont.Small)
+        panel:drawTextCentre(C.message,cx,selected and 178 or 30,1,.85,.4,1,UIFont.Small)
     end
     -- Projection-dependent decorations never feed back into authoritative physics.
     if not PSProjection.available() then return end
