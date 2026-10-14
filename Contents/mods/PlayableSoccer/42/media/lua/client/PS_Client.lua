@@ -148,9 +148,11 @@ function C.blocked(ignoreHover)
     local q=ISTimedActionQueue.getTimedActionQueue(p)
     if q then
         for _,action in ipairs(q.queue) do
-            -- Our event-free foot gesture must not interrupt dribbling input.
-            -- Exact class identity leaves every unrelated timed action gated.
-            if not PS_KickAction or getmetatable(action)~=PS_KickAction then return true end
+            -- Owned cosmetic gestures must not release server possession.
+            -- Exact identity leaves unrelated timed actions gated.
+            local kind=getmetatable(action)
+            if (not PS_KickAction or kind~=PS_KickAction)
+                and (not PS_TackleAction or kind~=PS_TackleAction) then return true end
         end
     end
     if getCell():getDrag(0) then return true end
@@ -165,6 +167,7 @@ end
 function C.ready()
     local p=player();local b=C.ball(C.selected)
     return p and b and C.receivedAt and now()-C.receivedAt<3000 and math.floor(p:getZ())==b.z
+        and now()>=(C.tacklingUntil or 0)
         and (not b.possession or (b.possession.kind=='player' and b.possession.key==owner(p)))
         and (not b.match or b.match.phase=='play')
         and PSRender.available() and PSProjection.available() and not PSSetup.active() and b.h<=.35 and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=PSCore.kickRange^2 and not C.blocked()
@@ -184,6 +187,9 @@ function C.tackle()
     if dx*dx+dy*dy<.00001 then return end
     local length=math.sqrt(dx*dx+dy*dy)
     C.charge=nil;C.lastTackle=now();C.guardInput(p)
+    if PSMotion.tackle(p,dx/length,dy/length) then
+        C.tacklingUntil=now()+PSMotion.tackleMilliseconds
+    end
     C.send('tackle',{id=b.id,dx=dx/length,dy=dy/length})
 end
 function C.capture(button)
@@ -366,7 +372,7 @@ end
 function C.reset()
     C.leave();C.rightUp();C.state={balls={}};C.samples={};C.revision=-1;C.receivedAt=nil;PSRender.clear()
     C.releaseSpace()
-    C.fallSerials={};C.recoveryUntil=nil;C.lastTackle=nil
+    C.fallSerials={};C.recoveryUntil=nil;C.lastTackle=nil;C.tacklingUntil=nil
     if C.overlay then C.overlay:removeFromUIManager();C.overlay=nil end
 end
 Events.OnGameStart.Add(function()

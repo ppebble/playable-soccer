@@ -20,3 +20,6 @@ motionPlayer={isLocalPlayer=getter("localPlayer",true),isDead=getter("dead",fals
     hasHitReaction=getter("hit",false),getVariableBoolean=getter("fallRecovery",false),
     setRunning=setter("running"),setSprinting=setter("sprinting"),setMoving=setter("moving"),
     setHitFromBehind=setter("behind"),setFallOnFront=setter("front"),setKnockedDown=setter("knocked")}
+motionPlayer.getX=function() return 10 end
+motionPlayer.getY=function() return 20 end
+motionPlayer.faceLocation=function(self,x,y) MOTION.facing={x=x,y=y} end

@@ -47,7 +47,13 @@ PSHUD={render=function() TEST.hudRendered=true end}
 PSMotion={play=function(p,lob,dx,dy) TEST.motions=(TEST.motions or 0)+1;TEST.motionLob=lob end}
 PSMotion.fall=function(p) assert(p==TEST.player);TEST.falls=(TEST.falls or 0)+1 end
 PSMotion.isDown=function(p) return TEST.down or TEST.onFloor end
+PSMotion.tackleMilliseconds=500
+PSMotion.tackle=function(p,dx,dy)
+    assert(p==TEST.player);TEST.tackles=(TEST.tackles or 0)+1;TEST.tackleDx=dx;TEST.tackleDy=dy
+    return not TEST.noTackleMotion
+end
 PS_KickAction={}
+PS_TackleAction={}
 function getSpecificPlayer() return TEST.player end
 function getPlayer() return TEST.player end
 function isClient() return true end

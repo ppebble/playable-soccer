@@ -197,3 +197,21 @@ C.update(TEST.player);TEST.queue={{}};C.update(TEST.player);assert(not C.control
 C.update(TEST.player);C.ball(1).z=1;C.update(TEST.player);assert(not C.controlId,'floor changes release registration');C.ball(1).z=0
 C.update(TEST.player);C.leave();assert(not C.controlId and TEST.sent[#TEST.sent].args.active==false)
 print('PASS stable hover participation, gated actions and explicit release boundaries')
+
+-- Cosmetic tackle attempts run on misses too, never replacing server authority.
+TEST.time=60000;C.receive('state',state(60));C.selected=1;C.lastSync=TEST.time;C.update(TEST.player)
+TEST.buttons={};TEST.queue={};local attempts=TEST.tackles or 0
+C.tackle()
+assert(TEST.tackles==attempts+1 and TEST.sent[#TEST.sent].command=='tackle','attempt animates before server success is known')
+assert(TEST.tackleDx==1 and TEST.tackleDy==0,'gesture receives cursor direction')
+C.mouseDown();assert(not C.charge,'cannot charge kick during shoulder gesture')
+TEST.queue={setmetatable({},PS_TackleAction)};C.update(TEST.player)
+assert(C.controlId==1 and not C.blocked(),'owned shoulder gesture preserves possession and movement input')
+TEST.queue={setmetatable({},PS_TackleAction),{Type='PS_TackleAction'}}
+assert(C.blocked(),'unrelated action cannot impersonate owned tackle class')
+TEST.queue={};TEST.time=TEST.time+PSMotion.tackleMilliseconds+1
+C.mouseDown();assert(C.charge,'kick charge returns after short gesture');C.charge=nil
+TEST.time=TEST.time+801;TEST.noTackleMotion=true;attempts=#TEST.sent
+C.tackle();assert(#TEST.sent==attempts+1 and TEST.sent[#TEST.sent].command=='tackle','unavailable cosmetic gesture does not disable gameplay')
+TEST.noTackleMotion=false;C.leave()
+print('PASS local tackle gesture, cooldown, charge boundary and stable possession')

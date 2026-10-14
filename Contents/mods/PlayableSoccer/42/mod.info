@@ -1,6 +1,6 @@
 name=Playable Soccer
 id=PlayableSoccer
 author=ask13
-modversion=0.5.1-dev
+modversion=0.5.2-dev
 versionMin=42.21
 description=Street soccer with persistent balls, charged ground and lob kicks, two configurable goals and server scoring. Convert a soccer ball through its inventory menu. Development build; new match features require live validation.

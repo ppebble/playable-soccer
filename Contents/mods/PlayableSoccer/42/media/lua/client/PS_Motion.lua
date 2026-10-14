@@ -79,4 +79,55 @@ function M.fall(p)
     return true
 end
 
+-- Shoulder gesture only: no attack/shove events and no root displacement.
+M.tackleMilliseconds=500
+PS_TackleAction=ISBaseTimedAction:derive('PS_TackleAction')
+function PS_TackleAction:isValid()
+    local p=self.character
+    return p and p:isLocalPlayer() and not p:isDead() and not p:getVehicle()
+        and not M.isDown(p) and not p:hasHitReaction()
+        and PSClient and self.ballId~=nil and PSClient.selected==self.ballId
+        and (not PSClient.blocked or not PSClient.blocked())
+end
+function PS_TackleAction:start()
+    if not self:isValid() then self:forceStop();return end
+    local ok=pcall(function()
+        self.action:setUseProgressBar(false)
+        self.action:setBlockMovementEtc(false)
+        -- A single facing request; ordinary locomotion keeps control thereafter.
+        self.character:faceLocation(self.character:getX()+self.dx,self.character:getY()+self.dy)
+        self:setActionAnim('PS_ShoulderTackle')
+    end)
+    if not ok then self:forceStop() end
+end
+function PS_TackleAction:update()
+    if not self:isValid() then self:forceStop() end
+end
+function PS_TackleAction:animEvent(event,parameter) end
+function PS_TackleAction:adjustMaxTime(time) return time end
+function PS_TackleAction:new(p,dx,dy)
+    local o=ISBaseTimedAction.new(self,p)
+    o.maxTime=15
+    o.stopOnWalk,o.stopOnRun,o.stopOnAim=false,false,false
+    o.ballId=PSClient and PSClient.selected
+    o.dx,o.dy=dx,dy
+    return o
+end
+function M.tackle(p,dx,dy)
+    local ok,played,reason=pcall(function()
+        if not p or not p:isLocalPlayer() then return false,'player' end
+        if type(dx)~='number' or type(dy)~='number' or dx~=dx or dy~=dy
+            or math.abs(dx)>10000 or math.abs(dy)>10000 then return false,'direction' end
+        local length=math.sqrt(dx*dx+dy*dy)
+        if length<.00001 then return false,'direction' end
+        local action=PS_TackleAction:new(p,dx/length,dy/length)
+        if not action:isValid() then return false,'state' end
+        local queue=ISTimedActionQueue.getTimedActionQueue(p)
+        if not queue or not queue.queue or #queue.queue>0 then return false,'busy' end
+        ISTimedActionQueue.add(action)
+        return true
+    end)
+    if not ok then return false,'unavailable' end
+    return played,reason
+end
 return PSMotion

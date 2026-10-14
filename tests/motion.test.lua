@@ -41,3 +41,35 @@ MOTION={state="getup",localPlayer=true};assert(PSMotion.isDown(motionPlayer))
 MOTION={state="run",localPlayer=true};assert(PSMotion.fall(motionPlayer))
 assert(not PSMotion.fall(nil) and not PSMotion.isDown(nil))
 print("PASS local native knockdown request and competing-state guards; animation playback not run")
+-- Tackle attempts animate even without a server hit, while locomotion is free.
+TEST.error=nil;TEST.stopped=false;TEST.queue.queue={}
+PSClient={selected=7,blocked=function() return MOTION.menu end}
+MOTION={state='movement',localPlayer=true,running=true,moving=true}
+assert(PSMotion.tackleMilliseconds==500)
+assert(PSMotion.tackle(motionPlayer,3,4))
+local tackle=TEST.queue.queue[1]
+assert(getmetatable(tackle).__index==PS_TackleAction)
+assert(tackle.ballId==7 and tackle.maxTime==15 and tackle:adjustMaxTime(15)==15)
+assert(not tackle.stopOnWalk and not tackle.stopOnRun and not tackle.stopOnAim)
+tackle.action=TEST.native;tackle:start()
+assert(TEST.anim=='PS_ShoulderTackle' and TEST.block==false and TEST.bar==false)
+assert(math.abs(MOTION.facing.x-10.6)<.00001 and math.abs(MOTION.facing.y-20.8)<.00001)
+assert(MOTION.moving and MOTION.running) -- never stop or teleport the player
+assert(tackle.stop==ISBaseTimedAction.stop and tackle.perform==ISBaseTimedAction.perform and tackle.complete==nil)
+tackle:animEvent('AttackCollisionCheck','Shove')
+tackle:update();assert(not TEST.stopped)
+assert(not PSMotion.tackle(motionPlayer,1,0)) -- preserve existing queued action
+for _,field in ipairs({'dead','vehicle','knocked','floor','hit','menu'}) do
+    MOTION[field]=true;TEST.stopped=false;tackle:update();assert(TEST.stopped,field);MOTION[field]=nil
+end
+PSClient.selected=8;TEST.stopped=false;tackle:update();assert(TEST.stopped)
+PSClient.selected=nil;assert(not tackle:isValid());PSClient.selected=7
+tackle:stop();assert(#TEST.queue.queue==0)
+assert(not PSMotion.tackle(motionPlayer,0,0))
+assert(not PSMotion.tackle(motionPlayer,0/0,1))
+assert(not PSMotion.tackle(motionPlayer,math.huge,1))
+MOTION.localPlayer=false;assert(not PSMotion.tackle(motionPlayer,1,0));MOTION.localPlayer=true
+assert(PSMotion.tackle(motionPlayer,1,0));tackle=TEST.queue.queue[1];tackle.action=TEST.native
+TEST.error=true;TEST.stopped=false;tackle:start();assert(TEST.stopped);TEST.error=nil
+tackle:perform();assert(#TEST.queue.queue==0)
+print('PASS shoulder gesture queue, movement, cancellation, direction and inherited cleanup')
