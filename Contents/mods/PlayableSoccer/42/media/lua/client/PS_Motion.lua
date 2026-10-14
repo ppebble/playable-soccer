@@ -134,7 +134,7 @@ function PS_TackleAction:animEvent(event,parameter) end
 function PS_TackleAction:adjustMaxTime(time) return time end
 function PS_TackleAction:new(p,dx,dy)
     local o=ISBaseTimedAction.new(self,p)
-    -- Native sprint-start torso lean plus a softer recovery blend.
+    -- Native forward shove: torso/arms only, no combat events or root travel.
     o.maxTime=18
     o.stopOnWalk,o.stopOnRun,o.stopOnAim=false,false,false
     o.ballId=PSClient and PSClient.selected

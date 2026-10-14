@@ -114,7 +114,7 @@ public final class MotionNativeTest {
         Class<?> source=Class.forName("zombie.core.skinnedmodel.advancedanimation.IAnimationVariableSource");
         Path path=Path.of(mod,"media/AnimSets/player/actions/PS_ShoulderTackle.xml");
         Object node=nodeType.getMethod("Parse",String.class).invoke(null,path.toString());
-        if(node==null || !"Bob_IdleToSprint".equals(nodeType.getField("animName").get(node))) throw new AssertionError("Native forward acceleration clip required");
+        if(node==null || !"Bob_Shove".equals(nodeType.getField("animName").get(node))) throw new AssertionError("Native forward shove clip required");
         if(nodeType.getField("useDeferredMovement").getBoolean(node) || nodeType.getField("deferredRotationScale").getFloat(node)!=0) throw new AssertionError("Tackle cannot drive root motion/turning");
         if(!((List<?>)nodeType.getField("events").get(node)).isEmpty()) throw new AssertionError("Tackle gesture must not run bump/combat events");
         Object values=vars.getConstructor().newInstance();
@@ -126,20 +126,20 @@ public final class MotionNativeTest {
         Set<String> bones=new HashSet<>();
         for(Object weight:(List<?>)nodeType.getField("subStateBoneWeights").get(node)) bones.add((String)weight.getClass().getField("boneName").get(weight));
         if(!bones.equals(Set.of("Bip01_Spine"))) throw new AssertionError("Tackle must preserve pelvis/root/leg locomotion");
-        String clip=Files.readString(Path.of("media/anims_X/Bob/Bob_IdleToSprint.x"));
+        String clip=Files.readString(Path.of("media/anims_X/Bob/Bob_Shove.x"));
         if(!clip.contains("Frame Bip01_Spine")) throw new AssertionError("Native torso bone missing");
         var rate=java.util.regex.Pattern.compile("AnimTicksPerSecond\\s*\\{\\s*(\\d+);").matcher(clip);
-        if(!rate.find()) throw new AssertionError("Missing bump timing");
+        if(!rate.find()) throw new AssertionError("Missing shove timing");
         var times=java.util.regex.Pattern.compile("(?m)^\\s*(\\d+);[34];").matcher(clip);
         int last=0;while(times.find()) last=Math.max(last,Integer.parseInt(times.group(1)));
         String xml=Files.readString(path);
-        if(!xml.contains("<m_SpeedScale>2.2</m_SpeedScale>") || !xml.contains("<m_BlendOutTime>0.14</m_BlendOutTime>")
-            || !xml.contains("<m_BlendTime>0.12</m_BlendTime>")
-            || last/Double.parseDouble(rate.group(1))/2.2+0.14>18.0/30) throw new AssertionError("Tackle gesture timeout truncates clip");
+        if(!xml.contains("<m_SpeedScale>1.35</m_SpeedScale>") || !xml.contains("<m_BlendOutTime>0.10</m_BlendOutTime>")
+            || !xml.contains("<m_BlendTime>0.08</m_BlendTime>")
+            || last/Double.parseDouble(rate.group(1))/1.35+0.10>18.0/30) throw new AssertionError("Tackle gesture timeout truncates clip");
         Class<?> player=Class.forName("zombie.characters.IsoPlayer");
         player.getMethod("faceLocation",float.class,float.class);
         player.getMethod("getX");player.getMethod("getY");
-        System.out.println("PASS native sprint-start lean, torso-only mask, event-free conditions, softer blends and duration; silhouette untested");
+        System.out.println("PASS native forward shove, torso-only mask, event-free conditions, blends and duration; silhouette untested");
     }
     private static void verifyFall() throws Exception {
         Class<?> player=Class.forName("zombie.characters.IsoPlayer",false,MotionNativeTest.class.getClassLoader());
