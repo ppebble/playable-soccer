@@ -23,3 +23,6 @@ motionPlayer={isLocalPlayer=getter("localPlayer",true),isDead=getter("dead",fals
 motionPlayer.getX=function() return 10 end
 motionPlayer.getY=function() return 20 end
 motionPlayer.faceLocation=function(self,x,y) MOTION.facing={x=x,y=y} end
+function getTimestampMs() return MOTION.time or 1000 end
+motionPlayer.setVariable=function(self,key,value) MOTION[key]=value end
+motionPlayer.clearVariable=function(self,key) MOTION[key]=nil end

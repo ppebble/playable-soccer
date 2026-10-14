@@ -99,3 +99,13 @@ PSHUD.render(TEST.panel,PSClient)
 local holder=false
 for _,entry in ipairs(TEST.texts) do if entry.text=="UI_PS_Possessionowner" then holder=true end end
 check(holder,"server holder name displayed")
+
+TEST.ball.match.testZones.shooter={x=8,y=4,r=.9}
+TEST.ball.possession={kind="zone",key="shooter"};TEST.texts={}
+PSHUD.render(TEST.panel,PSClient)
+local shotZone,shotOwner=false,false
+for _,entry in ipairs(TEST.texts) do
+    if entry.text=="UI_PS_ShooterZone" then shotZone=true end
+    if entry.text=="UI_PS_ShooterPossession" then shotOwner=true end
+end
+check(shotZone and shotOwner,"goal B shot zone and pending shot labeled")

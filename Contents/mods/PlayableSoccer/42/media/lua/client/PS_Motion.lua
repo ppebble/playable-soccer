@@ -53,6 +53,26 @@ end
 -- stay on the server. Never call Hit, falling damage, or drop equipment here.
 
 local M=PSMotion
+M.fallVisuals={}
+function M.clearFall(p)
+    if M.fallVisuals[p] then p:clearVariable('PS_SoccerFall');M.fallVisuals[p]=nil end
+end
+function M.updateFall(p)
+    local visual=M.fallVisuals[p]
+    if not visual then return end
+    local state=p:getCurrentActionContextStateName()
+    if state=='knockeddown' then visual.entered=true end
+    if p:isDead() or (visual.entered and state~='knockeddown') or not p:isKnockedDown()
+        or getTimestampMs()-visual.at>5000 then M.clearFall(p) end
+end
+function M.resetFalls()
+    for p in pairs(M.fallVisuals) do p:clearVariable('PS_SoccerFall') end
+    M.fallVisuals={}
+end
+if Events then
+    Events.OnPlayerUpdate.Add(M.updateFall)
+    Events.OnMainMenuEnter.Add(M.resetFalls)
+end
 local standing={idle=true,movement=true,run=true,sprint=true,aim=true,
     ["aim-sneak"]=true,["aim-strafe"]=true,slowidleblend=true,
     turningIdle180=true,turningMovement180=true,turningAim180=true}
@@ -75,8 +95,12 @@ function M.fall(p)
     p:setMoving(false)
     p:setHitFromBehind(false)
     p:setFallOnFront(false)
+    -- Select only our isolated backward-fall node before bKnockedDown changes.
+    -- Its one blend-aware sound avoids inherited native fall sound events.
+    p:setVariable('PS_SoccerFall',true)
+    M.fallVisuals[p]={at=getTimestampMs()}
     -- The registered bKnockedDown callback enters the installed knockeddown
-    -- graph; fallSit selects the backward reaction when fromBehind is false.
+    -- graph; the soccer node preserves the native backward reaction/recovery.
     -- Native state enter/exit own movement locking and the getup transition.
     p:setKnockedDown(true)
     return true

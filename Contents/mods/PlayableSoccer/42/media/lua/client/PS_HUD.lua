@@ -51,7 +51,7 @@ function H.render(panel,C)
         local possession=selected.possession
         local label=getText("UI_PS_FreeBall")
         if possession then
-            label=possession.kind=="zone" and getText("UI_PS_ZonePossession")
+            label=possession.kind=="zone" and getText(possession.key=="shooter" and "UI_PS_ShooterPossession" or "UI_PS_ZonePossession")
                 or getText("UI_PS_Possession",possession.key)
         end
         if C.charge then
@@ -79,6 +79,7 @@ function H.render(panel,C)
             local zones=b.match.testZones or {}
             testZone(panel,zones.tackle,b.z,"UI_PS_TackleZone",1,.45,.2)
             testZone(panel,zones.keeper,b.z,"UI_PS_KeeperZone",.3,.8,1)
+            testZone(panel,zones.shooter,b.z,"UI_PS_ShooterZone",.85,.4,1)
             for team,g in pairs(b.match.goals or {}) do
                 local red=team=="A" and .25 or 1
                 local blue=team=="A" and 1 or .25

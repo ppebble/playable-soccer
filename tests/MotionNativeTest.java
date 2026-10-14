@@ -5,6 +5,7 @@ import java.util.*;
 public final class MotionNativeTest {
     public static void main(String[] args) throws Exception {
         verifyFall();
+        verifySoccerFall(args[0]);
         verifyTackle(args[0]);
         verifyStrongKick(args[0]);
         Class<?> nodeType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNode");
@@ -38,6 +39,46 @@ public final class MotionNativeTest {
         System.out.println("PASS native soccer gesture clip/bones, event-free node selection, bounded duration and action APIs; visual playback untested");
     }
 
+    private static void verifySoccerFall(String mod) throws Exception {
+        // Standalone harness has no bootstrapped filesystem; resolve native x_extends
+        // against the installed game without loading mods or writing user state.
+        Class<?> fsType=Class.forName("zombie.ZomboidFileSystem");
+        Object folder=fsType.getField("base").get(fsType.getField("instance").get(null));
+        folder.getClass().getMethod("set",java.io.File.class).invoke(folder,Path.of(".").toAbsolutePath().normalize().toFile());
+        Class<?> nodeType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNode");
+        Class<?> stateType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimState");
+        Class<?> vars=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimationVariableSource");
+        Class<?> source=Class.forName("zombie.core.skinnedmodel.advancedanimation.IAnimationVariableSource");
+        Object state=stateType.getConstructor().newInstance();
+        Object own=nodeType.getMethod("Parse",String.class).invoke(null,Path.of(mod,"media/AnimSets/player/knockeddown/PS_SoccerFall.xml").toString());
+        if(!"Bob_HitReact02_Walking".equals(nodeType.getField("animName").get(own))) throw new AssertionError("Keep backward recovery clip");
+        try(var files=Files.list(Path.of("media/AnimSets/player/knockeddown"))) {
+            for(Path p:files.toList()) stateType.getMethod("addNode",nodeType).invoke(state,nodeType.getMethod("Parse",String.class).invoke(null,p.toString()));
+        }
+        stateType.getMethod("addNode",nodeType).invoke(state,own);
+        Object values=vars.getConstructor().newInstance();
+        vars.getMethod("setVariable",String.class,boolean.class).invoke(values,"fromBehind",false);
+        for(boolean moving:new boolean[]{false,true}) for(boolean running:new boolean[]{false,true}) for(boolean active:new boolean[]{false,true}) {
+            vars.getMethod("setVariable",String.class,boolean.class).invoke(values,"isMoving",moving);
+            vars.getMethod("setVariable",String.class,boolean.class).invoke(values,"isRunning",running);
+            vars.getMethod("setVariable",String.class,boolean.class).invoke(values,"PS_SoccerFall",active);
+            List<?> selected=(List<?>)stateType.getMethod("getAnimNodes",source,List.class).invoke(state,values,new ArrayList<>());
+            if(active && (selected.size()!=1 || selected.get(0)!=own)) throw new AssertionError("Native fall nodes still blend with soccer fall");
+            if(!active && (selected.isEmpty() || selected.contains(own))) throw new AssertionError("Ordinary fall selection changed");
+        }
+        int sound=0,recovery=0;
+        for(Object event:(List<?>)nodeType.getField("events").get(own)) {
+            String name=(String)event.getClass().getField("eventName").get(event);
+            String parameter=(String)event.getClass().getField("parameterValue").get(event);
+            if(name.equals("PlaySoundNoBlend") && parameter.equals("FallLight")) sound++;
+            else if(name.equals("setSitOnGround") && parameter.equals("TRUE")) recovery++;
+            else throw new AssertionError("Unexpected soccer fall event "+name);
+        }
+        if(sound!=1 || recovery!=1) throw new AssertionError("Single sound and native recovery event required");
+        Class<?> player=Class.forName("zombie.characters.IsoPlayer");
+        player.getMethod("setVariable",String.class,boolean.class);player.getMethod("clearVariable",String.class);
+        System.out.println("PASS native exclusive soccer fall selection, single blend-aware sound and recovery event; audible result untested");
+    }
     private static void verifyStrongKick(String mod) throws Exception {
         Class<?> nodeType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNode");
         Class<?> vars=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimationVariableSource");

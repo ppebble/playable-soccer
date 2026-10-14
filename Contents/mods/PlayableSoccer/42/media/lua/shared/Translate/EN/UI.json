@@ -39,5 +39,7 @@
   "UI_PS_TackleZone": "TACKLE ZONE · enter while controlling the ball",
   "UI_PS_KeeperZone": "OPPONENT ZONE · send ball in, tackle with Space",
   "UI_PS_TestZonesUnavailable": "Some test zones could not fit on clear ground. Redraw goals in an open area.",
-  "UI_PS_Tackled": "Tackled! Possession lost."
+  "UI_PS_Tackled": "Tackled! Possession lost.",
+  "UI_PS_ShooterZone": "SHOT ZONE B · send the ball in for an automatic shot",
+  "UI_PS_ShooterPossession": "Shot zone has the ball · shooting at goal B"
 }

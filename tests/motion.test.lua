@@ -96,3 +96,18 @@ TEST.stopped=false;movingStrong:update()
 assert(not TEST.stopped and TEST.block==false and TEST.anim=='PS_StrongKickGesture')
 assert(not PSMotion.play(TEST.player,false,1,0,1)) -- never displace queued actions
 movingStrong:perform();TEST.moving=nil
+-- Soccer-only fall selection survives entry, clears on recovery/reset/timeout.
+PSMotion.resetFalls()
+MOTION={state='movement',localPlayer=true,time=1000}
+assert(PSMotion.fall(motionPlayer) and MOTION.PS_SoccerFall)
+PSMotion.updateFall(motionPlayer);assert(MOTION.PS_SoccerFall)
+MOTION.state='knockeddown';PSMotion.updateFall(motionPlayer);assert(MOTION.PS_SoccerFall)
+MOTION.state='getup';MOTION.knocked=false;PSMotion.updateFall(motionPlayer)
+assert(not MOTION.PS_SoccerFall)
+MOTION={state='idle',localPlayer=true,time=1000};assert(PSMotion.fall(motionPlayer))
+MOTION.time=6001;PSMotion.updateFall(motionPlayer);assert(not MOTION.PS_SoccerFall)
+MOTION={state='idle',localPlayer=true,time=1000};assert(PSMotion.fall(motionPlayer))
+PSMotion.resetFalls();assert(not MOTION.PS_SoccerFall)
+MOTION={state='idle',localPlayer=true,time=1000};assert(PSMotion.fall(motionPlayer))
+MOTION.dead=true;PSMotion.updateFall(motionPlayer);assert(not MOTION.PS_SoccerFall)
+print('PASS isolated soccer-fall selection lifecycle and recovery cleanup')

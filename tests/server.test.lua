@@ -322,3 +322,60 @@ matchBall.x=p.x+1.8;matchBall.y=p.y;matchBall.h=0
 leadSerial=matchBall.kickSerial
 M.send(p,'kick',{id=2,dx=1,dy=0,power=.5})
 assert(matchBall.kickSerial==leadSerial,'loose ball retains original kick reach')
+resetTest();M.send(p,'configure',config);advance(.4)
+local shooter=matchBall.match.testZones.shooter
+assert(shooter and shooter.x==7 and shooter.y==0 and shooter.r==.9,'shooter sits three tiles inside goal B')
+local function feedShooter(height)
+    S.controls={};matchBall.possession=nil;matchBall.captureAfter=nil;matchBall.zoneGrace=nil;matchBall.shooterZoneBlocked=nil
+    matchBall.x=shooter.x;matchBall.y=shooter.y;matchBall.h=height or 0;matchBall.vz=0;matchBall.vx=0;matchBall.vy=0
+    matchBall.match.phase='play'
+    advance(.01)
+end
+feedShooter(0)
+assert(matchBall.possession and matchBall.possession.key=='shooter','loose low pass is received')
+local receiveX=matchBall.x;local autoSerial=matchBall.kickSerial
+advance(.2)
+assert(matchBall.possession and matchBall.x==receiveX,'receiver visibly holds before shooting')
+advance(.16)
+assert(not matchBall.possession and matchBall.kickSerial==autoSerial+1 and matchBall.vx>0 and matchBall.vy==0 and matchBall.vz==0,'automatic ground shot aims at goal B center')
+assert(matchBall.kicker=='zone:shooter')
+local score=matchBall.match.scoreA
+for i=1,100 do advance(.02);if matchBall.match.phase=='goal' then break end end
+assert(matchBall.match.scoreA==score+1 and matchBall.match.phase=='goal','receiver shot scores through normal goal authority')
+advance(2.1);assert(not matchBall.possession and not matchBall.shooterZoneBlocked,'goal reset clears receiver state')
+feedShooter(.5)
+assert(not matchBall.possession,'receiver ignores airborne pass above low capture height')
+feedShooter(0);matchBall.possession={kind='player',key=ownerKey};p.x=shooter.x;p.y=shooter.y
+S.controls[ownerKey]={id=2,at=M.time/1000};S.motion={}
+advance(.01)
+assert(matchBall.possession and matchBall.possession.kind=='player','receiver never steals player-held ball')
+feedShooter(0);autoSerial=matchBall.kickSerial
+M.wall=function(a,b) return (a.x<8 and b.x>=8) or (b.x<8 and a.x>=8) end
+advance(.4)
+assert(not matchBall.possession and matchBall.kickSerial==autoSerial,'new obstacle cancels automatic shot')
+for i=1,20 do advance(.1) end
+assert(not matchBall.possession and matchBall.kickSerial==autoSerial,'blocked shot cannot loop into repeated recapture')
+M.wall=nil
+feedShooter(0);advance(.36);autoSerial=matchBall.kickSerial
+matchBall.vx=0;matchBall.vy=0
+for i=1,10 do advance(.1) end
+assert(not matchBall.possession and matchBall.kickSerial==autoSerial,'own shot stopped inside receiver cannot auto-fire repeatedly after grace')
+feedShooter(0);autoSerial=matchBall.kickSerial
+matchBall.match.phase='goal';matchBall.match.resetAt=M.time/1000+2
+advance(.5)
+assert(not matchBall.possession and matchBall.kickSerial==autoSerial,'goal phase cancels pending receiver shot')
+feedShooter(0);autoSerial=matchBall.kickSerial;M.send(p,'reset',{id=2});advance(.5)
+assert(not matchBall.possession and matchBall.kickSerial==autoSerial,'reset cancels pending automatic shot')
+feedShooter(0);other.x=matchBall.x-.4;other.y=matchBall.y;S.controls.other={id=2,at=M.time/1000}
+M.time=M.time+801;S.command(other,'tackle',{id=2,dx=1,dy=0})
+assert(heldBy(other),'receiver possession can be stolen with normal zone tackle')
+autoSerial=matchBall.kickSerial;advance(.4)
+assert(matchBall.kickSerial==autoSerial,'stolen receiver never fires old timer')
+resetTest();M.wall=function(a,b) return (a.x<8 and b.x>=8) or (b.x<8 and a.x>=8) end
+M.send(p,'configure',config)
+assert(not matchBall.match.testZones.shooter and matchBall.match.testZones.keeper and matchBall.match.testZones.tackle,'blocked shot path omits only receiver zone')
+M.wall=nil;M.missing=function(x,y) return x==7 and y==0 end
+M.send(p,'configure',config)
+assert(not matchBall.match.testZones.shooter,'unloaded receiver placement omitted')
+M.missing=nil
+print('PASS automatic receiver hold, goal shot, grace, stealing, reset and blocked paths')
