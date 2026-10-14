@@ -55,7 +55,7 @@ M.square(1,1,0).solid=false
 -- A long real-world pause may advance at most one bounded quarter-second.
 b.x=0; b.y=0; b.vx=16; b.vy=0
 M.time=M.time+3600000; M.tick()
-assert(b.x<=4 and S.balls[1]==b,'tick stall must not teleport or expire ball')
+assert(b.x<=16*.25*1.4 and S.balls[1]==b,'tick stall must not teleport or expire ball')
 M.players={other}; other.x=30
 for i=1,1000 do M.time=M.time+250; M.tick() end
 assert(S.balls[1]==b,'disconnect and age do not remove ball')

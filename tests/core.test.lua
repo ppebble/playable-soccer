@@ -43,7 +43,7 @@ local paused=assert(C.newBall(0,0,0)); C.kick(paused,1,0,1)
 assert(not C.step(paused,0) and paused.x==0)
 assert(not C.step(paused,-1) and paused.x==0)
 C.step(paused,3600)
-assert(paused.x<=4,'wall clock stalls must not advance an hour of travel')
+assert(paused.x<=4.5,'wall clock stalls must not advance an hour of travel')
 print('PASS soccer core persistent physics')
 local frozen=C.newBall(5,0,0); frozen.h=.2; frozen.vx=10; frozen.vz=1; frozen.match={phase='goal'}
 C.step(frozen,.25)
@@ -60,12 +60,12 @@ for _,dt in ipairs({.01,.05,.25}) do
             for i=1,math.ceil(20/dt) do
                 C.step(shot,dt,nil,function(ball) peak=math.max(peak,ball.h) end)
             end
-            local target=loft and (.65+17.75*power^1.4) or (1.5+16.9*power)
+            local target=loft and (.65+23.27*power^1.4) or (1.5+22.42*power)
             local targetPeak=loft and (.7+2.9*power) or (power>=.8 and (.02+.13*(power-.8)/.2) or 0)
             assert(math.abs(shot.x-target)<.001,'charge must map to stopping distance independent of timestep/loft')
             assert(math.abs(peak-targetPeak)<.03,'loft peak must match intended world-floor height')
             assert(shot.vx==0 and shot.h==0 and shot.vz==0,'shots land and rest without deletion')
-            if power==1 then assert(shot.x>=18 and shot.x<=20,'full-range street soccer bound') end
+            if power==1 then assert(shot.x>=23.9 and shot.x<=24,'full-range street soccer bound') end
             if loft and power==0 then assert(peak>.68 and shot.x<.66,'right tap must rise high nearby') end
             ranges[power]=shot.x
             coreMeasurements[#coreMeasurements+1]=string.format('dt=%.2f %s p=%.1f distance=%.4f peak=%.4f',dt,loft and 'RIGHT' or 'LEFT',power,shot.x,peak)
@@ -85,3 +85,32 @@ touch.h=.001; assert(not C.dribble(touch,1,0,5),'airborne contact prohibited')
 touch.h=0; touch.vz=.001; assert(not C.dribble(touch,1,0,5),'rising contact prohibited')
 touch.vz=0; touch.match={phase='goal'}; assert(not C.dribble(touch,1,0,5),'goal pause contact prohibited')
 print('PASS distance-based charge, high right lob, slight strong-left lift and running dribble')
+
+-- Real elapsed time advances faster, while touch travel is halved.
+for _,runner in ipairs({0,5,8,12}) do
+    local b=C.newBall(0,0,0);assert(C.dribble(b,1,0,runner))
+    local initial=b.vx
+    C.step(b,.1)
+    local expected=initial*.14-.5*6*.14^2
+    assert(math.abs(b.x-expected)<.001,'touch advances at1.4x trajectory rate')
+    for i=1,1000 do C.step(b,.01) end
+    assert(math.abs(b.x-initial^2/12)<.001,'touch stops at half previous distance')
+    assert(C.kick(b,1,0,1,false) and b.rollDrag==3,'manual shot clears touch braking')
+end
+local fast=C.newBall(0,0,0);C.kick(fast,1,0,1,true)
+local launch=fast.vz;local apexAt
+for i=1,300 do C.step(fast,.01);if fast.vz<=0 then apexAt=i*.01;break end end
+assert(math.abs(apexAt-launch/C.gravity/1.4)<.02,'lob reaches same apex sooner')
+local landing=C.newBall(0,0,0);C.kick(landing,1,0,0,true)
+for i=1,1000 do C.step(landing,.01);if not landing.landingRange then break end end
+assert(landing.vx>0 and landing.vz>0,'first lob landing bounces forward and upward')
+local landingX=landing.x;C.step(landing,.05)
+assert(landing.x>landingX and not landing.landingRange,'forward landing boost is one-shot')
+local reflected=C.newBall(0,0,0);C.kick(reflected,1,0,0,true)
+for i=1,1000 do
+    C.step(reflected,.01,function(b,fx,fy,tx,ty) return tx>.1 and tx>fx,false,false end)
+    if not reflected.landingRange then break end
+end
+assert(reflected.vx<0,'landing follows wall-reflected direction, not original kick')
+C.kick(reflected,1,0,.5,true);C.kick(reflected,1,0,.1,false)
+assert(reflected.landingRange==nil,'ground re-kick clears lob landing reserve')
