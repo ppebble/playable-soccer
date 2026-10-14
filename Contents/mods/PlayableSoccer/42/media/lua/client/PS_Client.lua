@@ -33,7 +33,7 @@ function C.releaseGuard()
 end
 function C.leave()
     C.selected=nil;C.charge=nil;C.pendingItem=nil;C.releaseGuard()
-    C.moveSample=nil;C.lastTouch=nil
+    C.moveSample=nil;C.lastTouch=nil;C.lastDribbleRequest=nil
     PSSetup.cancel()
 end
 function C.start(p,item)
@@ -66,6 +66,8 @@ function C.receive(command,args)
         if b.id and PSCore.finite(b.x) and PSCore.finite(b.y) and PSCore.finite(b.z) and PSCore.finite(b.h) then
             local prior=C.samples[b.id]
             samples[b.id]={a=prior and prior.b or b,b=b,at=t,duration=prior and math.min(250,math.max(1,t-prior.at)) or 1}
+            if prior and b.dribble and b.kickSerial and b.kickSerial~=(prior.b.kickSerial or 0)
+                and player() and b.kicker==owner(player()) then C.lastTouch=t end
             if prior and not b.dribble and b.kickSerial and b.kickSerial~=(prior.b.kickSerial or 0) and player() and b.kicker==owner(player()) then
                 PSMotion.play(player(),b.lob==true,b.kickDx,b.kickDy)
             end
@@ -185,16 +187,27 @@ function C.update(p)
             end
         end
     end
-    if previous and previous.z==p:getZ() and t-previous.at<=250 and C.ready()
+    if previous and previous.z==p:getZ() and t-previous.at<=250 and C.inputActive()
         and not C.charge and not isMouseButtonDown(0) and not isMouseButtonDown(1)
-        and p:isPlayerMoving() and (p:isRunning() or p:isSprinting())
-        and (not C.lastTouch or t-C.lastTouch>=400) then
+        and (p:isRunning() or p:isSprinting())
+        and (not C.lastTouch or t-C.lastTouch>=400)
+        and (not C.lastDribbleRequest or t-C.lastDribbleRequest>=100) then
         local b=C.ball(C.selected)
         local dx,dy=p:getX()-previous.x,p:getY()-previous.y
         local distance=dx*dx+dy*dy
-        if b.h==0 and b.vz==0 and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=(PSCore.dribbleRange or .8)^2
-            and distance>0.000001 and distance<1 then
-            local length=math.sqrt(distance);C.lastTouch=t
+        -- This is intent acquisition, not a local kick. Include the displayed
+        -- interpolation and a small approach margin; the server still requires
+        -- actual .8-tile contact or a validated short swept contact.
+        local near=(p:getX()-b.x)^2+(p:getY()-b.y)^2<=1.6^2
+        if not near then
+            for _,shown in ipairs(C.positions()) do
+                if shown.id==b.id and (p:getX()-shown.x)^2+(p:getY()-shown.y)^2<=1.6^2 then near=true end
+            end
+        end
+        if b.z==math.floor(p:getZ()) and (not b.match or b.match.phase=='play')
+            and b.h==0 and b.vz==0 and PSRender.available() and PSProjection.available()
+            and near and distance>0.000001 and distance<1.5^2 then
+            local length=math.sqrt(distance);C.lastDribbleRequest=t
             C.send("dribble",{id=b.id,dx=dx/length,dy=dy/length})
         end
     end

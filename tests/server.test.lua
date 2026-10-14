@@ -154,3 +154,50 @@ local scoredX=matchBall.x
 M.time=M.time+100; M.tick()
 assert(matchBall.x==scoredX and matchBall.vx==0,'goal ball stays frozen until reset')
 print('PASS bounded running dribble authority and immediate goal freeze')
+-- Rejected requests consume only the 80ms request budget, not touch cooldown.
+matchBall.match.phase='play'; matchBall.x=5; matchBall.y=0; matchBall.h=0; matchBall.vz=0; matchBall.vx=0
+other.x=6; other.y=0; other.running=true; other.sprinting=false; other.moving=true
+M.time=M.time+1000; S.motion={}
+serial=matchBall.kickSerial
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(matchBall.kickSerial==serial,'approach alone must not kick')
+M.time=M.time+100; other.x=5.6
+S.command(other,'dribble',{id=2,dx=-1,dy=0})
+assert(matchBall.kickSerial==serial+1,'rejected approach retries before400ms')
+M.time=M.time+100
+S.command(other,'dribble',{id=2,dx=-1,dy=0})
+assert(matchBall.kickSerial==serial+1,'accepted contact retains400ms cooldown')
+local function prepareSweep(startX)
+    M.time=M.time+1000; S.motion={}; matchBall.x=5; matchBall.y=0
+    matchBall.h=0; matchBall.vz=0; matchBall.vx=0; matchBall.vy=0
+    other.x=startX; other.y=0; other.moving=true; other.faceX=1
+    S.lastTick=M.time/1000; M.tick()
+    return matchBall.kickSerial
+end
+serial=prepareSweep(4.8)
+M.time=M.time+100; other.x=5.9; other.moving=false
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(matchBall.kickSerial==serial+1,'recent swept contact survives missed frame and delayed moving flag')
+serial=prepareSweep(4.8)
+M.time=M.time+200; other.x=5.9
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(matchBall.kickSerial==serial,'stale swept contact rejected')
+serial=prepareSweep(3.9)
+M.time=M.time+100; other.x=5.9
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(matchBall.kickSerial==serial,'teleport segment cannot grant contact')
+serial=prepareSweep(4.8)
+M.time=M.time+100; other.x=5.9
+M.wall=function(a,b) return a.x~=b.x end
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(matchBall.kickSerial==serial,'swept player path cannot cross wall')
+M.wall=nil
+serial=prepareSweep(4.8)
+M.time=M.time+100; other.x=5.9; matchBall.h=.01
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(matchBall.kickSerial==serial,'swept contact cannot touch airborne ball')
+serial=prepareSweep(5.8)
+M.time=M.time+100; other.x=6.5
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(matchBall.kickSerial==serial,'swept historical contact cannot kick remotely')
+print('PASS retry budget, accepted cooldown, swept contact and rejection boundaries')

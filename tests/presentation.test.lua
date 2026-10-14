@@ -45,11 +45,17 @@ TEST.draws={};TEST.ball.h=.6
 PSHUD.render(TEST.panel,PSClient)
 local floorShadow,airGuide=false,false
 for _,d in ipairs(TEST.draws) do
-    if d.y==50 and d.x<50 and d.x+d.w>50 then floorShadow=true end
+    if math.abs(d.y-50)<2 and d.x<50 and d.x+d.w>50 then
+        floorShadow=true;check(d.w<=14,"shadow diameter stays small")
+    end
     if d.x==49 and d.y<44 and d.w==2 then airGuide=true end
 end
-check(floorShadow and airGuide,"airborne ball keeps ground shadow and height guide")
+check(floorShadow and not airGuide,"airborne ball has only a small floor shadow")
 TEST.ball.h=0
+TEST.draws={};PSHUD.render(TEST.panel,PSClient)
+for _,d in ipairs(TEST.draws) do
+    check(not (math.abs(d.y-50)<2 and d.x<50 and d.x+d.w>50),"grounded ball has no added shadow")
+end
 TEST.ball.match={scoreA=2,scoreB=1,phase="goal",lastScoringTeam="A",goals={}}
 TEST.texts={};PSHUD.render(TEST.panel,PSClient)
 check(TEST.texts[1].text=="A  2  :  1  B" and TEST.texts[2].text=="UI_PS_GoalA","score and goal message")

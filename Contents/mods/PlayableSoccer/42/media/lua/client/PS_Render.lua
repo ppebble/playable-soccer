@@ -5,9 +5,11 @@ PSRender = {proxies={},spins={}}
 local R=PSRender
 function R.clear() R.proxies={};R.spins={} end
 function R.available() return getCore():isOption3DGroundItem() end
--- Cosmetic rolling comes from interpolated travel, never feeds server physics.
--- The native item atlas keys exact Euler angles. Bound the palette to 8 headings
--- x 16 phases instead of creating another cached texture every rendered frame.
+-- Cosmetic vertical spin comes from travel, never feeds server physics.
+-- Native rotation uses the ground-item origin, not the ball's geometric center.
+-- X/Y rolling made the stock mesh orbit its ground pivot in live testing. Keep
+-- those axes fixed; do not invent a mesh-center translation to compensate.
+-- The native atlas keys exact Euler angles, so reuse 16 vertical orientations.
 local phaseStep=360/16
 local radiansToDegrees=180/math.pi
 function R.updateSpin(s,b)
@@ -16,14 +18,11 @@ function R.updateSpin(s,b)
         local distance=math.sqrt(dx*dx+dy*dy)
         if distance>0.00001 and distance<2 then
             s.phase=((s.phase or 0)+distance/0.11*radiansToDegrees)%360
-            -- Kahlua remainder preserves a negative sign; offset before modulo.
-            local heading=(math.atan2(dy,dx)*radiansToDegrees+270)%360
-            s.heading=(math.floor(heading/45+0.5)*45)%360
         end
     end
     s.x,s.y,s.z=b.x,b.y,b.z
-    s.phase=s.phase or 0;s.heading=s.heading or 0
-    return (math.floor(s.phase/phaseStep+0.5)*phaseStep)%360,s.heading
+    s.phase=s.phase or 0
+    return (math.floor(s.phase/phaseStep+0.5)*phaseStep)%360
 end
 function R.draw(balls)
     if #balls>0 and not R.available() then R.clear();return false end
@@ -49,12 +48,12 @@ function R.draw(balls)
                     end
                 end
                 if proxy then
-                    local phase,heading=R.updateSpin(spin,b)
-                    -- Native renderer maps world Z to its vertical model axis.
-                    -- Roll around a horizontal axis, then orient it to travel.
-                    spin.item:setWorldXRotation(phase)
+                    local phase=R.updateSpin(spin,b)
+                    -- Item world Z maps to the renderer's vertical model axis.
+                    -- Holding X/Y at zero avoids tilting the ground-offset mesh.
+                    spin.item:setWorldXRotation(0)
                     spin.item:setWorldYRotation(0)
-                    spin.item:setWorldZRotation(heading)
+                    spin.item:setWorldZRotation(phase)
                     proxy:setSquare(square)
                     -- setOffset sends native network sync; use the plain field setters.
                     proxy:setOffX(b.x-math.floor(b.x))

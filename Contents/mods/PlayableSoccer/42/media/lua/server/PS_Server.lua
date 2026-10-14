@@ -88,38 +88,66 @@ end
 local function mobile(p)
     return not p:isDead() and not p:getVehicle() and C.finite(p:getX()) and C.finite(p:getY()) and integer(p:getZ())
 end
-local cooldown={start=.5,kick=.15,dribble=.4,stop=.15,sync=.25,configure=.5,reset=.5,team=.5}
+local cooldown={start=.5,kick=.15,dribble=.08,stop=.15,sync=.25,configure=.5,reset=.5,team=.5}
 local function sampleMotion(p,t)
     local key=owner(p)
     local previous=S.motion[key]
-    local current={x=p:getX(),y=p:getY(),z=p:getZ(),time=t}
+    local current={x=p:getX(),y=p:getY(),z=p:getZ(),time=t,positionAt=t}
     if previous and previous.z==current.z then
-        local elapsed=t-previous.time
+        local elapsed=t-(previous.positionAt or previous.time)
         local dx,dy=current.x-previous.x,current.y-previous.y
         local length=math.sqrt(dx*dx+dy*dy)
         if elapsed>0 and elapsed<=.75 and length>.0001 and length<=elapsed*12 then
             current.dx=dx/length; current.dy=dy/length; current.movedAt=t
+            if elapsed<=.15 and length<=1.2 then
+                current.fromX=previous.x; current.fromY=previous.y; current.fromAt=previous.positionAt or previous.time
+            end
         elseif previous.movedAt and t-previous.movedAt<=.3 then
             current.dx=previous.dx; current.dy=previous.dy; current.movedAt=previous.movedAt
+        end
+        if length<=.0001 then
+            current.positionAt=previous.positionAt or previous.time
+            if previous.fromAt and t-previous.fromAt<=.15 then
+                current.fromX=previous.fromX; current.fromY=previous.fromY; current.fromAt=previous.fromAt
+            end
         end
     end
     S.motion[key]=current
     return current
 end
 local function dribbleDirection(p,args,t)
-    if not (p:isRunning() or p:isSprinting()) or not p:isPlayerMoving() then return nil end
+    if not (p:isRunning() or p:isSprinting()) then return nil end
     if not C.finite(args.dx) or not C.finite(args.dy) or math.abs(args.dx)>1 or math.abs(args.dy)>1 then return nil end
     local length=math.sqrt(args.dx*args.dx+args.dy*args.dy)
     if length<.0001 then return nil end
     local dx,dy=args.dx/length,args.dy/length
     local motion=sampleMotion(p,t)
+    if not p:isPlayerMoving() and not motion.dx then return nil end
     local sx,sy=motion.dx,motion.dy
     if not sx then sx=p:getForwardDirectionX(); sy=p:getForwardDirectionY() end
     if not C.finite(sx) or not C.finite(sy) then return nil end
     local sl=math.sqrt(sx*sx+sy*sy)
     if sl<.0001 or (dx*sx+dy*sy)/sl<.5 then return nil end
     -- Server direction wins; input is only an intent compatible with it.
-    return sx/sl,sy/sl
+    return sx/sl,sy/sl,motion
+end
+local function contact(p,b,motion,t)
+    local px,py=p:getX(),p:getY()
+    local dx,dy=px-b.x,py-b.y
+    if dx*dx+dy*dy<=C.dribbleRange^2 then return px,py end
+    -- Catch an actual short crossing between frames without granting remote
+    -- kicks. End position remains within manual reach; only a fresh observed
+    -- movement segment may supply a historical contact point.
+    if dx*dx+dy*dy>C.kickRange^2 or not motion.fromAt or t-motion.fromAt>.15 then return nil end
+    local sx,sy=px-motion.fromX,py-motion.fromY
+    local length=sx*sx+sy*sy
+    if length<=0 or length>1.2^2 then return nil end
+    local along=math.max(0,math.min(1,((b.x-motion.fromX)*sx+(b.y-motion.fromY)*sy)/length))
+    local x,y=motion.fromX+sx*along,motion.fromY+sy*along
+    if (x-b.x)^2+(y-b.y)^2>C.dribbleRange^2 then return nil end
+    local bx,by,halt=S.collision(b,motion.fromX,motion.fromY,px,py)
+    if bx or by or halt then return nil end
+    return x,y
 end
 local function clearPoint(x,y,z)
     local sq=square(x,y,z)
@@ -199,21 +227,26 @@ function S.command(p,command,args)
         local b=integer(args.id) and S.balls[args.id]
         if not b or p:getZ()~=b.z or (b.match and b.match.phase~='play') then return end
         local dx,dy=p:getX()-b.x,p:getY()-b.y
-        local range=command=='dribble' and C.dribbleRange or C.kickRange
-        if dx*dx+dy*dy>range*range then return end
+        if dx*dx+dy*dy>C.kickRange^2 then return end
         local kx,ky,power,lob=args.dx,args.dy,args.power,args.lob
+        local contactX,contactY=p:getX(),p:getY()
         if command=='dribble' then
-            if b.h~=0 or b.vz~=0 or (rates.kick and t-rates.kick<.4) then return end
-            kx,ky=dribbleDirection(p,args,t)
+            if b.h~=0 or b.vz~=0 or (rates.kick and t-rates.kick<.4)
+                or (rates.touch and t-rates.touch<.4) then return end
+            local motion
+            kx,ky,motion=dribbleDirection(p,args,t)
             if not kx then return end
+            contactX,contactY=contact(p,b,motion,t)
+            if not contactX then return end
             power=C.dribblePower; lob=false
         end
-        local bx,by,halt=S.collision(b,p:getX(),p:getY(),b.x,b.y)
+        local bx,by,halt=S.collision(b,contactX,contactY,b.x,b.y)
         if bx or by or halt or not C.kick(b,kx,ky,power,lob) then return end
         local length=math.sqrt(kx*kx+ky*ky)
         b.kickSerial=(b.kickSerial or 0)+1; b.kicker=key
         b.kickDx=kx/length; b.kickDy=ky/length; b.lob=lob==true
         b.dribble=command=='dribble'
+        if b.dribble then rates.touch=t end
     end
     publishAll()
 end

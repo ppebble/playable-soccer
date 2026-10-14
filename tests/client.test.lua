@@ -114,3 +114,25 @@ C.receive('state',goal);assert(C.positions()[1].x==2 and not C.ready())
 local restart=state(13,1);restart.balls[1].match={phase='play'};TEST.time=10750
 C.receive('state',restart);assert(C.positions()[1].x==1)
 print("PASS client charge, cancellation, UI gates, interpolation and detached proxy")
+-- Acquisition follows displayed/latest positions; attempts are not accepted touches.
+C.leave();C.selected=1;TEST.running=true;TEST.sprinting=false;TEST.moving=false
+TEST.x=1;TEST.y=1;TEST.time=20000;C.lastSync=TEST.time
+C.receive('state',state(20,1));C.update(TEST.player)
+TEST.time=20020;TEST.x=1.05
+C.receive('state',state(21,4));C.update(TEST.player)
+assert(TEST.sent[#TEST.sent].command=='dribble','visible contact may request against newer distant sample')
+assert(C.lastTouch==nil,'request must not spend accepted-touch cooldown')
+TEST.time=20120;TEST.x=2.5;C.moveSample={x=2.4,y=1,z=0,at=20100}
+local attemptCount=#TEST.sent
+C.update(TEST.player)
+assert(#TEST.sent==attemptCount+1,'approach retries in100ms despite1.4sample-ready boundary')
+local ack=state(22,2.6);ack.balls[1].kickSerial=9;ack.balls[1].kicker='test';ack.balls[1].dribble=true
+C.receive('state',ack);assert(C.lastTouch==TEST.time)
+TEST.time=20220;TEST.x=2.7;C.moveSample={x=2.6,y=1,z=0,at=20200}
+attemptCount=#TEST.sent;C.update(TEST.player);assert(#TEST.sent==attemptCount,'accepted touch suppresses further retries')
+TEST.time=20520;TEST.x=2.8;C.moveSample={x=2.7,y=1,z=0,at=20500}
+C.update(TEST.player);assert(#TEST.sent==attemptCount+1,'accepted cooldown expires after400ms')
+C.lastTouch=nil;C.lastDribbleRequest=nil;TEST.time=25000;C.lastSync=TEST.time
+TEST.x=2.9;C.moveSample={x=2.8,y=1,z=0,at=24980}
+attemptCount=#TEST.sent;C.update(TEST.player);assert(#TEST.sent==attemptCount,'stale state never requests contact')
+print('PASS dribble acquisition, retries, accepted acknowledgment and freshness')
