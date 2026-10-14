@@ -3,7 +3,7 @@ local C = PSCore
 C.maxDistance = 23.92
 C.motionRate = 1.4
 C.groundDrag = 3
-C.airDrag = C.groundDrag
+C.airDrag = 0
 C.maxSpeed = math.sqrt(2*C.groundDrag*C.maxDistance)
 C.kickRange = 1.4
 C.dribbleRange = .8
@@ -15,8 +15,21 @@ end
 -- floor spans approximately three horizontal tiles vertically.
 C.tilesPerFloor = 3
 C.gravity = 9.81 / C.tilesPerFloor
+C.restitution = .48
+C.restVerticalSpeed = .3 / C.tilesPerFloor
 function C.finite(n)
     return type(n)=='number' and n==n and n>-math.huge and n<math.huge
+end
+local function airDuration(height,vertical)
+    if height==0 and vertical==0 then return 0 end
+    local impact=math.sqrt(vertical*vertical+2*C.gravity*height)
+    local time=(vertical+impact)/C.gravity
+    local rebound=impact*C.restitution
+    while rebound>=C.restVerticalSpeed do
+        time=time+2*rebound/C.gravity
+        rebound=rebound*C.restitution
+    end
+    return time
 end
 function C.newBall(x,y,z)
     if not C.finite(x) or not C.finite(y) or not C.finite(z) or z~=math.floor(z) then return nil end
@@ -32,19 +45,38 @@ function C.kick(b,dx,dy,power,lob)
         or (lob~=nil and type(lob)~='boolean') or power<0 or power>1 or math.abs(dx)>100000 or math.abs(dy)>100000 then return false end
     local length=math.sqrt(dx*dx+dy*dy)
     if length<.00001 or b.h>.35 then return false end
-    -- Charge controls travel distance, not speed. Equal air/ground drag keeps
-    -- the landing height independent from final horizontal stopping distance.
+    -- Travel includes every flight/bounce plus the final ground roll. Airborne
+    -- horizontal momentum is conserved; only rolling and walls slow it down.
     local distance=lob and (.65+(C.maxDistance-.65)*power^1.4) or (1.5+(C.maxDistance-1.5)*power)
     local peak=0
     if lob then peak=.7+2.9*power
     elseif power>=.8 then peak=.02+.13*(power-.8)/.2 end
-    -- Reserve a small part of the range for forward motion on first landing.
-    b.landingRange=lob and math.min(.4,distance*.3) or nil
-    b.landingDx=lob and dx/length or nil; b.landingDy=lob and dy/length or nil
-    local speed=math.sqrt(2*C.groundDrag*(distance-(b.landingRange or 0)))
-    b.vx=dx/length*speed; b.vy=dy/length*speed; b.vz=math.sqrt(2*C.gravity*peak)
+    local vertical=math.sqrt(2*C.gravity*peak)
+    local flight=airDuration(b.h,vertical)
+    -- Stable positive root of distance = speed*flight + speed^2/(2*drag).
+    local speed=2*distance/(flight+math.sqrt(flight*flight+2*distance/C.groundDrag))
+    b.vx=dx/length*speed; b.vy=dy/length*speed; b.vz=vertical
     b.rollDrag=C.groundDrag
     return true
+end
+-- Resolve exact ground-impact times inside the existing bounded substep.
+-- Returned time is airborne; any remainder rolls on the ground.
+local function verticalStep(b,dt)
+    local remaining,air=dt,0
+    while remaining>0 and (b.h>0 or b.vz~=0) do
+        local impact=math.sqrt(b.vz*b.vz+2*C.gravity*b.h)
+        local hit=(b.vz+impact)/C.gravity
+        if hit>remaining then
+            b.h=b.h+b.vz*remaining-.5*C.gravity*remaining*remaining
+            b.vz=b.vz-C.gravity*remaining
+            air=air+remaining; remaining=0
+        else
+            air=air+hit; remaining=remaining-hit
+            b.h=0; b.vz=impact*C.restitution
+            if b.vz<C.restVerticalSpeed then b.vz=0 end
+        end
+    end
+    return air
 end
 function C.dribble(b,dx,dy,runnerSpeed)
     if not valid(b) or b.h~=0 or b.vz~=0 or (b.match and b.match.phase~='play')
@@ -68,12 +100,13 @@ function C.step(b,dt,collision,onSegment)
     local count=math.max(1,math.ceil(dt*120),math.ceil(speed*dt/.08))
     local slice=dt/count
     for _=1,count do
-        local landed=false
         local fx,fy,fh=b.x,b.y,b.h
         local v=math.sqrt(b.vx*b.vx+b.vy*b.vy)
         local drag=b.rollDrag or C.groundDrag
-        local travelTime=math.min(slice,v/drag)
-        local travel=v*travelTime-.5*drag*travelTime*travelTime
+        local airborne=verticalStep(b,slice)
+        local grounded=slice-airborne
+        local travelTime=math.min(grounded,v/drag)
+        local travel=v*airborne+v*travelTime-.5*drag*travelTime*travelTime
         local scale=v>0 and travel/v or 0
         local tx,ty=b.x+b.vx*scale,b.y+b.vy*scale
         local bx,by,halt=false,false,false
@@ -81,31 +114,11 @@ function C.step(b,dt,collision,onSegment)
         if halt then b.vx=0; b.vy=0; b.vz=0; b.h=0; return true end
         if bx then b.vx=-b.vx*.72 else b.x=tx end
         if by then b.vy=-b.vy*.72 else b.y=ty end
-        if b.h>0 or b.vz~=0 then
-            b.vz=b.vz-C.gravity*slice; b.h=b.h+b.vz*slice
-            if b.h<=0 then
-                landed=true
-                b.h=0; b.vz=-b.vz*.48
-                if b.vz<.3/C.tilesPerFloor then b.vz=0 end
-            end
-        end
         do
             local v=math.sqrt(b.vx*b.vx+b.vy*b.vy)
             if v>0 then
-                local nextV=math.max(0,v-drag*slice)
-                if nextV<.03 then nextV=0 end
+                local nextV=math.max(0,v-drag*grounded)
                 b.vx=b.vx*nextV/v; b.vy=b.vy*nextV/v
-            end
-        end
-        if b.landingRange then
-            local horizontal=math.sqrt(b.vx*b.vx+b.vy*b.vy)
-            if horizontal>0 then
-                b.landingDx=b.vx/horizontal; b.landingDy=b.vy/horizontal
-            end
-            if landed then
-                local forward=math.sqrt(horizontal*horizontal+2*drag*b.landingRange)
-                b.vx=b.landingDx*forward; b.vy=b.landingDy*forward
-                b.landingRange=nil; b.landingDx=nil; b.landingDy=nil
             end
         end
         if onSegment and onSegment(b,fx,fy,fh) then return true end

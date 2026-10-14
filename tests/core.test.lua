@@ -101,16 +101,41 @@ local fast=C.newBall(0,0,0);C.kick(fast,1,0,1,true)
 local launch=fast.vz;local apexAt
 for i=1,300 do C.step(fast,.01);if fast.vz<=0 then apexAt=i*.01;break end end
 assert(math.abs(apexAt-launch/C.gravity/1.4)<.02,'lob reaches same apex sooner')
-local landing=C.newBall(0,0,0);C.kick(landing,1,0,0,true)
-for i=1,1000 do C.step(landing,.01);if not landing.landingRange then break end end
-assert(landing.vx>0 and landing.vz>0,'first lob landing bounces forward and upward')
-local landingX=landing.x;C.step(landing,.05)
-assert(landing.x>landingX and not landing.landingRange,'forward landing boost is one-shot')
-local reflected=C.newBall(0,0,0);C.kick(reflected,1,0,0,true)
-for i=1,1000 do
-    C.step(reflected,.01,function(b,fx,fy,tx,ty) return tx>.1 and tx>fx,false,false end)
-    if not reflected.landingRange then break end
+for _,dt in ipairs({.01,.05,.25}) do
+    for _,power in ipairs({0,.5,.8,1}) do
+        local shot=C.newBall(0,0,0); C.kick(shot,1,0,power,true)
+        local horizontal=shot.vx
+        local lastVertical=shot.vz
+        local descending=0; local rebounds=0
+        for i=1,math.ceil(20/dt) do
+            C.step(shot,dt,nil,function(ball,x,y,h)
+                if ball.h>0 or ball.vz~=0 then
+                    assert(ball.vx>0 and ball.x>x,'every airborne slice continues forward')
+                    assert(math.abs(ball.vx-horizontal)<.0000001,'flight and bounces never add/remove horizontal energy')
+                    if ball.vz<0 then descending=descending+1 end
+                end
+                if lastVertical<0 and ball.vz>0 then rebounds=rebounds+1 end
+                lastVertical=ball.vz
+            end)
+        end
+        assert(descending>3 and rebounds>=2,'descent after multiple bounces is exercised')
+    end
 end
-assert(reflected.vx<0,'landing follows wall-reflected direction, not original kick')
-C.kick(reflected,1,0,.5,true);C.kick(reflected,1,0,.1,false)
-assert(reflected.landingRange==nil,'ground re-kick clears lob landing reserve')
+local reflected=C.newBall(0,0,0); C.kick(reflected,1,0,0,true)
+local hit=false; local rebounds=0; local lastVertical=reflected.vz
+for i=1,1000 do
+    C.step(reflected,.01,function(ball,fx,fy,tx,ty)
+        if tx>.1 and tx>fx then hit=true; return true,false,false end
+        return false,false,false
+    end,function(ball)
+        if hit and (ball.h>0 or ball.vz~=0) then assert(ball.vx<0,'all bounces retain wall-reflected direction') end
+        if lastVertical<0 and ball.vz>0 then rebounds=rebounds+1 end
+        lastVertical=ball.vz
+    end)
+end
+assert(hit and rebounds>=2 and reflected.vx==0,'reflection case lands and settles')
+-- Elevated re-kicks include initial height in the complete flight budget.
+local elevated=C.newBall(0,0,0); elevated.h=.3; C.kick(elevated,1,0,.5,true)
+for i=1,2000 do C.step(elevated,.01) end
+assert(math.abs(elevated.x-(.65+23.27*.5^1.4))<.001,'initial elevation preserves selected range')
+print('PASS continuous airborne momentum through all descents and rebounds')

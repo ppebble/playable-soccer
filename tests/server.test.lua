@@ -22,20 +22,21 @@ assert(S.isItemActive(p,p.items[1]))
 M.send(p,'start',{itemId=100}); assert(S.serial==1,'one ball per owner')
 M.send(other,'stop',{id=1}); assert(S.balls[1]==b,'only owner may end')
 M.send(other,'kick',{id=1,dx=1,dy=0,power=math.huge}); assert(b.vx==0)
-M.send(other,'kick',{id=1,dx=1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'other nearby players can kick')
-S.command(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'rate limit')
+M.send(other,'kick',{id=1,dx=1,dy=0,power=1}); assert(b.vx>0 and b.vz>0,'other nearby players can kick')
+local acceptedKickSpeed=b.vx
+S.command(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==acceptedKickSpeed,'rate limit')
 other.x=20
-M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'range validation')
+M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==acceptedKickSpeed,'range validation')
 other.x=.5; other.z=1
-M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'floor validation')
+M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==acceptedKickSpeed,'floor validation')
 other.z=0; other.dead=true
-M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'alive validation')
+M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==acceptedKickSpeed,'alive validation')
 other.dead=false; other.vehicle={}
-M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'on-foot validation')
+M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==acceptedKickSpeed,'on-foot validation')
 other.vehicle=nil
 M.wall=function(a,c) return (a.x<1 and c.x>=1) or (c.x<1 and a.x>=1) end
 other.x=1.1
-M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'wall blocks near-ball kick')
+M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==acceptedKickSpeed,'wall blocks near-ball kick')
 M.tick(); M.time=M.time+250; M.tick()
 assert(b.x<1 and b.vx<0,'wall reflection authoritative')
 local bx,by,halt=S.collision(b,.5,.5,5.5,.5)
