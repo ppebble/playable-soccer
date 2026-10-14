@@ -26,7 +26,7 @@
   "UI_PS_LineInvalid": "Goal lines must be 2–10 tiles long. Choose the endpoint again.",
   "UI_PS_ChargeReady": "Kick power · hold a mouse button",
   "UI_PS_ChargeMax": "MAX · release to kick",
-  "UI_PS_ChargeRange": "Full charge: 0.9s · max kick: about 24 tiles on level ground",
+  "UI_PS_ChargeRange": "Full charge: 0.9s · shot ~24 / lob ~28 tiles on level ground",
   "UI_PS_LowShot": "Low lifted shot",
   "UI_PS_SoccerMenu": "Soccer menu",
   "UI_PS_Resume": "Continue",

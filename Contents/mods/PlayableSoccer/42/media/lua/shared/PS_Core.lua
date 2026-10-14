@@ -1,6 +1,7 @@
 PSCore = PSCore or {}
 local C = PSCore
 C.maxDistance = 23.92
+C.maxLobDistance = 28
 C.motionRate = 1.4
 C.groundDrag = 3
 C.airDrag = 0
@@ -47,9 +48,9 @@ function C.kick(b,dx,dy,power,lob)
     if length<.00001 or b.h>.35 then return false end
     -- Travel includes every flight/bounce plus the final ground roll. Airborne
     -- horizontal momentum is conserved; only rolling and walls slow it down.
-    local distance=lob and (.65+(C.maxDistance-.65)*power^1.4) or (1.5+(C.maxDistance-1.5)*power)
+    local distance=lob and (.65+(C.maxLobDistance-.65)*power^1.4) or (1.5+(C.maxDistance-1.5)*power)
     local peak=0
-    if lob then peak=.7+2.9*power
+    if lob then peak=(.7+2.9*power)*.85
     elseif power>=.8 then peak=.02+.13*(power-.8)/.2 end
     local vertical=math.sqrt(2*C.gravity*peak)
     local flight=airDuration(b.h,vertical)

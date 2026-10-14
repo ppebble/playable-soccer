@@ -60,13 +60,13 @@ for _,dt in ipairs({.01,.05,.25}) do
             for i=1,math.ceil(20/dt) do
                 C.step(shot,dt,nil,function(ball) peak=math.max(peak,ball.h) end)
             end
-            local target=loft and (.65+23.27*power^1.4) or (1.5+22.42*power)
-            local targetPeak=loft and (.7+2.9*power) or (power>=.8 and (.02+.13*(power-.8)/.2) or 0)
+            local target=loft and (.65+27.35*power^1.4) or (1.5+22.42*power)
+            local targetPeak=loft and ((.7+2.9*power)*.85) or (power>=.8 and (.02+.13*(power-.8)/.2) or 0)
             assert(math.abs(shot.x-target)<.001,'charge must map to stopping distance independent of timestep/loft')
             assert(math.abs(peak-targetPeak)<.03,'loft peak must match intended world-floor height')
             assert(shot.vx==0 and shot.h==0 and shot.vz==0,'shots land and rest without deletion')
-            if power==1 then assert(shot.x>=23.9 and shot.x<=24,'full-range street soccer bound') end
-            if loft and power==0 then assert(peak>.68 and shot.x<.66,'right tap must rise high nearby') end
+            if power==1 then assert(math.abs(shot.x-(loft and 28 or 23.92))<.001,'separate full-range lob and ground shot bounds') end
+            if loft and power==0 then assert(peak>.57 and peak<.60 and shot.x<.66,'right tap must rise high nearby') end
             ranges[power]=shot.x
             coreMeasurements[#coreMeasurements+1]=string.format('dt=%.2f %s p=%.1f distance=%.4f peak=%.4f',dt,loft and 'RIGHT' or 'LEFT',power,shot.x,peak)
         end
@@ -137,5 +137,5 @@ assert(hit and rebounds>=2 and reflected.vx==0,'reflection case lands and settle
 -- Elevated re-kicks include initial height in the complete flight budget.
 local elevated=C.newBall(0,0,0); elevated.h=.3; C.kick(elevated,1,0,.5,true)
 for i=1,2000 do C.step(elevated,.01) end
-assert(math.abs(elevated.x-(.65+23.27*.5^1.4))<.001,'initial elevation preserves selected range')
+assert(math.abs(elevated.x-(.65+27.35*.5^1.4))<.001,'initial elevation preserves selected range')
 print('PASS continuous airborne momentum through all descents and rebounds')
