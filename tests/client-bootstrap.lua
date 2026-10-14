@@ -21,11 +21,13 @@ TEST.player={getX=function() return TEST.x or 1 end,getY=function() return TEST.
 TEST.player.isPlayerMoving=function() return TEST.moving end
 TEST.player.isRunning=function() return TEST.running end
 TEST.player.isSprinting=function() return TEST.sprinting end
+TEST.player.isKnockedDown=function() return TEST.down or false end
+TEST.player.isGettingUp=function() return TEST.gettingUp or false end
 TEST.player.isForceAim=function() return TEST.forceAim or false end
 TEST.player.setForceAim=function(self,v) TEST.forceAim=v end
 TEST.player.nullifyAiming=function() TEST.forceAim=false;TEST.aiming=false end
 Mouse={UIBlockButtonDown=function(b) TEST.captured=TEST.captured or {};TEST.captured[b]=true end}
-Keyboard={KEY_ESCAPE=1}
+Keyboard={KEY_ESCAPE=1,KEY_SPACE=57}
 ISObjectClickHandler={}
 PSProjection={available=function() return not TEST.noProjection end,screenToWorld=function(i,x,y,z) if TEST.noProjection then return end;return x,y end}
 PSSetup={active=function() return TEST.setup end,cancel=function() TEST.setup=nil end,click=function() TEST.setupClicked=true end,menu=function() end}
@@ -43,6 +45,8 @@ ISContextMenu={get=function()
 end}
 PSHUD={render=function() TEST.hudRendered=true end}
 PSMotion={play=function(p,lob,dx,dy) TEST.motions=(TEST.motions or 0)+1;TEST.motionLob=lob end}
+PSMotion.fall=function(p) assert(p==TEST.player);TEST.falls=(TEST.falls or 0)+1 end
+PSMotion.isDown=function(p) return TEST.down or TEST.onFloor end
 PS_KickAction={}
 function getSpecificPlayer() return TEST.player end
 function getPlayer() return TEST.player end
@@ -51,6 +55,7 @@ function sendClientCommand(p,module,command,args) TEST.sent[#TEST.sent+1]={comma
 function getText(k) return k end
 function isGamePaused() return TEST.paused end
 function isMouseButtonDown(b) return TEST.buttons[b] end
+function isKeyDown(key) return TEST.keys and TEST.keys[key] or false end
 function getMouseX() return 8 end
 function getMouseY() return 1 end
 function screenToIsoX(i,x,y,z) return x end

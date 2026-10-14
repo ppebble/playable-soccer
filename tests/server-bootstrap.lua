@@ -40,6 +40,9 @@ function M.player(name,x,y,id)
     function p:getY() return self.y end
     function p:getZ() return self.z end
     function p:isDead() return self.dead end
+    function p:isOnFloor() return self.onFloor end
+    function p:isKnockedDown() return self.knockedDown end
+    function p:getCurrentStateName() return self.stateName end
     function p:getVehicle() return self.vehicle end
     function p:isRunning() return self.running or false end
     function p:isSprinting() return self.sprinting or false end

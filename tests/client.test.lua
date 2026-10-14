@@ -92,57 +92,6 @@ C.keyPressed(Keyboard.KEY_ESCAPE);assert(not TEST.setup)
 local accepted=state(9);accepted.balls[1].kickSerial=1;accepted.balls[1].kicker="test";accepted.balls[1].kickDx=1;accepted.balls[1].kickDy=0;accepted.balls[1].lob=true
 C.receive("state",accepted);assert(TEST.motions==1 and TEST.motionLob)
 C.receive("state",accepted);assert(TEST.motions==1)
--- Running contact is world movement, independent of cursor, and rate bounded.
-C.leave();C.selected=1;TEST.running=true;TEST.moving=true;TEST.time=10000
-C.receive("state",state(10));C.update(TEST.player)
-TEST.time=10020;TEST.x=1.1;C.update(TEST.player)
-assert(TEST.sent[#TEST.sent].command=="dribble" and TEST.sent[#TEST.sent].args.dx==1 and TEST.sent[#TEST.sent].args.dy==0)
-local sent=#TEST.sent
-TEST.time=10040;TEST.x=1.2;C.update(TEST.player);assert(#TEST.sent==sent)
-TEST.time=10420;TEST.x=1.3;C.update(TEST.player);assert(#TEST.sent==sent) -- stale delta
-TEST.time=10440;TEST.x=1.4;C.update(TEST.player);assert(#TEST.sent==sent+1)
-sent=#TEST.sent;C.lastTouch=nil;TEST.running=false
-TEST.time=10460;TEST.x=1.5;C.update(TEST.player);assert(#TEST.sent==sent) -- walking
-TEST.running=true;C.ball(1).h=.01;TEST.time=10480;TEST.x=1.6;C.update(TEST.player);assert(#TEST.sent==sent)
-C.ball(1).h=0;TEST.buttons[0]=true;TEST.time=10500;TEST.x=1.7;C.update(TEST.player);assert(#TEST.sent==sent)
-TEST.buttons[0]=false;TEST.time=10520;TEST.x=1.9;C.update(TEST.player);assert(#TEST.sent==sent) -- no contact
-TEST.x=1.1;TEST.running=false;TEST.sprinting=true;C.moveSample=nil;C.update(TEST.player)
-TEST.time=10540;TEST.y=1.1;C.update(TEST.player)
-assert(TEST.sent[#TEST.sent].command=="dribble" and TEST.sent[#TEST.sent].args.dx==0 and TEST.sent[#TEST.sent].args.dy==1)
-local contact=state(11);contact.balls[1].kickSerial=2;contact.balls[1].kicker='test';contact.balls[1].dribble=true
-C.receive('state',contact);assert(TEST.motions==1)
-local goal=state(12,2);goal.balls[1].match={phase='goal'};TEST.time=10700
-C.receive('state',goal);assert(C.positions()[1].x==2 and not C.ready())
-local restart=state(13,1);restart.balls[1].match={phase='play'};TEST.time=10750
-C.receive('state',restart);assert(C.positions()[1].x==1)
-print("PASS client charge, cancellation, UI gates, interpolation and detached proxy")
--- Acquisition follows displayed/latest positions; attempts are not accepted touches.
-C.leave();C.selected=1;TEST.running=true;TEST.sprinting=false;TEST.moving=false
-TEST.x=1;TEST.y=1;TEST.time=20000;C.lastSync=TEST.time
-C.receive('state',state(20,1));C.update(TEST.player)
-TEST.time=20020;TEST.x=1.05
-C.receive('state',state(21,4));C.update(TEST.player)
-assert(TEST.sent[#TEST.sent].command=='dribble','visible contact may request against newer distant sample')
-assert(C.lastTouch==nil,'request must not spend accepted-touch cooldown')
-TEST.time=20120;TEST.x=2.5;C.moveSample={x=2.4,y=1,z=0,at=20100}
-local attemptCount=#TEST.sent
-C.update(TEST.player)
-assert(#TEST.sent==attemptCount+1,'approach retries in100ms despite1.4sample-ready boundary')
-local ack=state(22,2.6);ack.balls[1].kickSerial=9;ack.balls[1].kicker='test';ack.balls[1].dribble=true
-C.receive('state',ack);assert(C.lastTouch==TEST.time)
-assert(C.positions()[1].x==2.6,'accepted touch snaps to authoritative contact immediately')
-local following=state(23,3);following.balls[1].kickSerial=9;following.balls[1].dribble=true
-TEST.time=20170;C.receive('state',following)
-assert(C.positions()[1].x==2.6,'following snapshot cannot jump behind contact ack')
-TEST.time=20195;assert(C.positions()[1].x>2.6 and C.positions()[1].x<3,'ordinary movement remains bounded interpolation')
-TEST.time=20220;TEST.x=2.7;C.moveSample={x=2.6,y=1,z=0,at=20200}
-attemptCount=#TEST.sent;C.update(TEST.player);assert(#TEST.sent==attemptCount,'accepted touch suppresses further retries')
-TEST.time=20520;TEST.x=2.8;C.moveSample={x=2.7,y=1,z=0,at=20500}
-C.update(TEST.player);assert(#TEST.sent==attemptCount+1,'accepted cooldown expires after400ms')
-C.lastTouch=nil;C.lastDribbleRequest=nil;TEST.time=25000;C.lastSync=TEST.time
-TEST.x=2.9;C.moveSample={x=2.8,y=1,z=0,at=24980}
-attemptCount=#TEST.sent;C.update(TEST.player);assert(#TEST.sent==attemptCount,'stale state never requests contact')
-print('PASS dribble acquisition, retries, accepted acknowledgment and freshness')
 -- A match start is a setup transition only after its authoritative ball exists.
 C.leave();C.start(TEST.player,item,'match');assert(C.pendingMode=='match' and not C.selected)
 C.receive('state',state(30));assert(TEST.setup==1 and not C.selected and not C.pendingMode)
@@ -173,3 +122,60 @@ nearby.options[2].callback();assert(C.selected==1 and TEST.sent[#TEST.sent].args
 C.openMenu();C.menu:hideAndChildren();C.update(TEST.player);assert(not C.menu,'outside-dismissed menu releases soccer block')
 C.openMenu();Events.OnPlayerDeath.callback(TEST.player);assert(not C.menu and not C.selected)
 print('PASS match start state ordering, SP reentrancy, soccer menu ownership/teams and cleanup')
+-- Registration is a heartbeat, never a client-authored possession or auto kick.
+TEST.time=40000;TEST.x=1;TEST.y=1;TEST.running=true;TEST.moving=true
+C.receive('state',state(40));C.selected=1;C.lastSync=TEST.time;C.update(TEST.player)
+assert(TEST.sent[#TEST.sent].command=='control' and TEST.sent[#TEST.sent].args.active==true)
+local count=#TEST.sent;TEST.time=40500;TEST.x=1.1;C.update(TEST.player);assert(#TEST.sent==count)
+TEST.time=41000;C.update(TEST.player);assert(#TEST.sent==count+1 and TEST.sent[#TEST.sent].command=='control')
+C.openMenu();assert(TEST.sent[#TEST.sent].command=='control' and TEST.sent[#TEST.sent].args.active==false)
+C.closeMenu();C.update(TEST.player);assert(TEST.sent[#TEST.sent].args.active==true)
+for _,packet in ipairs(TEST.sent) do assert(packet.command~='dribble','legacy automatic dribble must not be sent') end
+local b=C.ball(1);b.possession={kind='player',key='other'}
+assert(not C.ready());C.mouseDown();assert(not C.charge)
+b.possession={kind='zone',key='keeper'};assert(not C.ready())
+b.possession={kind='player',key='test'};assert(C.ready())
+b.possession=nil;assert(C.ready())
+local heldState=state(41,1.2);heldState.balls[1].possession={kind='player',key='test'}
+C.receive('state',heldState);assert(C.positions()[1].x==1.2,'new holder snaps to authoritative position')
+TEST.time=TEST.time+100
+local followingHeld=state(42,1.3);followingHeld.balls[1].possession={kind='player',key='test'}
+C.receive('state',followingHeld);assert(C.positions()[1].x==1.2,'same holder keeps interpolation')
+TEST.time=TEST.time+50;assert(C.positions()[1].x>1.2 and C.positions()[1].x<1.3,'same holder moves smoothly between samples')
+b=C.ball(1);b.possession=nil
+-- Tackle follows the cursor and is locally rate limited; possession remains server-owned.
+local ui=C.overlay;local space=Keyboard.KEY_SPACE;TEST.keys={[space]=true}
+ui:onKeyPress(space);assert(ui:isKeyConsumed(space) and TEST.sent[#TEST.sent].command=='tackle')
+assert(TEST.sent[#TEST.sent].args.dx==1 and TEST.sent[#TEST.sent].args.dy==0 and b.possession==nil,'far cursor sends normalized server-compatible direction')
+count=#TEST.sent;ui:onKeyPress(space);assert(#TEST.sent==count)
+C.openMenu();assert(TEST.banned,'opening menu cannot leak held native shove')
+C.leave();assert(TEST.banned,'leaving while Space held retains only press-scoped ban')
+TEST.keys[space]=false;ui:onKeyRelease(space);assert(ui:isKeyConsumed(space) and not TEST.banned,'release restores prior ban while UI press remains consumed')
+ui:onKeyPress(space);assert(not ui:isKeyConsumed(space),'next ordinary space returns to shove')
+C.selected=1;TEST.time=42000;C.receivedAt=TEST.time;C.update(TEST.player)
+C.receive('tackled',{id=1,serial=1});assert(TEST.falls==1 and C.message=='UI_PS_Tackled' and not C.controlId and C.blocked())
+C.receive('tackled',{id=1,serial=1});C.receive('tackled',{id=1,serial=0});assert(TEST.falls==1)
+C.receive('tackled',{id=1,serial=0/0});assert(TEST.falls==1)
+count=#TEST.sent;ui:onKeyPress(space);assert(ui:isKeyConsumed(space) and not C.ready() and #TEST.sent==count,'recovery consumes Space without tackling')
+ui:onKeyRelease(space)
+TEST.time=43500;TEST.down=true;C.receivedAt=TEST.time;assert(C.blocked())
+TEST.down=false;TEST.gettingUp=true;assert(C.blocked());TEST.gettingUp=false
+TEST.onFloor=true;assert(C.blocked());TEST.onFloor=false
+C.update(TEST.player);assert(C.controlId==1)
+TEST.typing=true;C.update(TEST.player);assert(not C.controlId);TEST.typing=false
+C.update(TEST.player);TEST.noProjection=true;C.update(TEST.player);assert(not C.controlId);TEST.noProjection=false
+C.leave();assert(not C.controlId)
+C.selected=1;C.receivedAt=TEST.time;TEST.keys[space]=true;ui:onKeyPress(space);C.leave();assert(TEST.banned)
+TEST.keys[space]=false;C.update(TEST.player);assert(not C.spaceGuard and not TEST.banned,'lost release recovered by raw key polling')
+C.selected=1;TEST.keys[space]=true;ui:onKeyPress(space);Events.OnPlayerDeath.callback(TEST.player)
+assert(not C.spaceGuard and not TEST.banned,'death restores press-scoped ban')
+C.selected=1;C.openMenu();count=#TEST.sent;TEST.keys[space]=true;ui:onKeyPress(space)
+assert(ui:isKeyConsumed(space) and TEST.banned and #TEST.sent==count,'new Space press in soccer menu blocks shove without tackle')
+TEST.keys[space]=false;ui:onKeyRelease(space);assert(not TEST.banned)
+C.leave();TEST.setup=true;TEST.keys[space]=true;ui:onKeyPress(space)
+assert(ui:isKeyConsumed(space) and TEST.banned and #TEST.sent==count,'setup consumes Space without tackle')
+TEST.keys[space]=false;ui:onKeyRelease(space);C.leave();ui:onKeyPress(space)
+assert(not ui:isKeyConsumed(space) and not TEST.banned,'Space outside soccer remains native')
+C.selected=1;TEST.typing=true;ui:onKeyPress(space)
+assert(not ui:isKeyConsumed(space) and not TEST.banned,'text entry Space remains untouched');TEST.typing=false;C.leave()
+print('PASS possession ownership, control heartbeat/cleanup, tackle latch and direct local fall deduplication')

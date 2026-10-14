@@ -27,15 +27,37 @@ end
 function C.releaseGuard()
     local g=C.guard;C.guard=nil
     if g then
-        g.player:setBannedAttacking(g.previous)
+        if not C.spaceGuard or C.spaceGuard.player~=g.player then g.player:setBannedAttacking(g.previous) end
         g.player:nullifyAiming()
         g.player:setForceAim(g.forceAim)
     end
+end
+function C.captureSpace()
+    local p=player();if not p or C.spaceGuard then return end
+    local previous=p:isBannedAttacking()
+    if C.guard and C.guard.player==p then previous=C.guard.previous end
+    C.spaceGuard={player=p,previous=previous};p:setBannedAttacking(true)
+end
+function C.releaseSpace()
+    local g=C.spaceGuard;C.spaceGuard=nil
+    if g and (not C.guard or C.guard.player~=g.player) then g.player:setBannedAttacking(g.previous) end
 end
 function C.leave()
     C.closeMenu();PSSetup.cancel()
     C.selected=nil;C.charge=nil;C.pendingItem=nil;C.pendingMode=nil;C.releaseGuard()
     C.moveSample=nil;C.lastTouch=nil;C.lastDribbleRequest=nil
+    C.control(false)
+end
+function C.control(active)
+    local id=active and C.selected or nil
+    if C.controlId and C.controlId~=id then
+        local previous=C.controlId;C.controlId=nil;C.controlAt=nil
+        C.send('control',{id=previous,active=false})
+    end
+    if id and (C.controlId~=id or now()-(C.controlAt or 0)>=1000) then
+        C.controlId=id;C.controlAt=now()
+        C.send('control',{id=id,active=true})
+    end
 end
 function C.start(p,item,mode)
     if p~=player() or not item or item:getFullType()~="PlayableSoccer.SportsSoccerBall" then return end
@@ -46,8 +68,8 @@ function C.start(p,item,mode)
 end
 function C.stop(id)
     id=id or C.selected
-    if id then C.send("stop",{id=id}) end
     C.leave()
+    if id then C.send("stop",{id=id}) end
 end
 function C.isItemActive(p,item)
     if not p or not item then return false end
@@ -62,6 +84,17 @@ function C.ball(id)
 end
 function C.receive(command,args)
     args=args or {}
+    if command=='tackled' then
+        if not PSCore.finite(args.id) or not PSCore.finite(args.serial) or args.serial<0 then return end
+        C.fallSerials=C.fallSerials or {}
+        if args.serial<=(C.fallSerials[args.id] or -1) then return end
+        C.fallSerials[args.id]=args.serial
+        local p=player();if not p or p:isDead() then return end
+        C.recoveryUntil=now()+1200;C.charge=nil;C.control(false);C.releaseGuard()
+        C.notice('UI_PS_Tackled')
+        PSMotion.fall(p)
+        return
+    end
     if command=="notice" then
         C.pendingItem=nil;C.pendingMode=nil;C.notice(args.key)
         PSSetup.receive(command,args);return
@@ -72,9 +105,13 @@ function C.receive(command,args)
         if b.id and PSCore.finite(b.x) and PSCore.finite(b.y) and PSCore.finite(b.z) and PSCore.finite(b.h) then
             local prior=C.samples[b.id]
             local touched=prior and b.kickSerial and b.kickSerial~=(prior.b.kickSerial or 0)
+            local before=prior and prior.b.possession
+            local after=b.possession
+            local holderChanged=(before and before.kind)~=(after and after.kind)
+                or (before and before.key)~=(after and after.key)
             -- Accepted touches immediately show the authoritative contact point.
             -- The next ordinary snapshot starts there, never behind the ack.
-            samples[b.id]={a=not touched and prior and prior.b or b,b=b,at=t,duration=prior and math.min(250,math.max(1,t-prior.at)) or 1}
+            samples[b.id]={a=not touched and not holderChanged and prior and prior.b or b,b=b,at=t,duration=prior and math.min(250,math.max(1,t-prior.at)) or 1}
             if prior and b.dribble and b.kickSerial and b.kickSerial~=(prior.b.kickSerial or 0)
                 and player() and b.kicker==owner(player()) then C.lastTouch=t end
             if prior and not b.dribble and b.kickSerial and b.kickSerial~=(prior.b.kickSerial or 0) and player() and b.kicker==owner(player()) then
@@ -107,6 +144,7 @@ function C.blocked()
     if C.menu then return true end
     local p=player()
     if not p or p:isDead() or p:getVehicle() or (isGamePaused and isGamePaused()) or getCore():isDoingTextEntry() then return true end
+    if now()<(C.recoveryUntil or 0) or PSMotion.isDown(p) or p:isGettingUp() then return true end
     local q=ISTimedActionQueue.getTimedActionQueue(p)
     if q then
         for _,action in ipairs(q.queue) do
@@ -126,12 +164,25 @@ end
 function C.ready()
     local p=player();local b=C.ball(C.selected)
     return p and b and C.receivedAt and now()-C.receivedAt<3000 and math.floor(p:getZ())==b.z
+        and (not b.possession or (b.possession.kind=='player' and b.possession.key==owner(p)))
         and (not b.match or b.match.phase=='play')
         and PSRender.available() and PSProjection.available() and not PSSetup.active() and b.h<=.35 and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=PSCore.kickRange^2 and not C.blocked()
 end
 function C.inputActive()
     return C.selected and C.ball(C.selected) and C.receivedAt and now()-C.receivedAt<3000
-        and not PSSetup.active() and not C.blocked()
+        and PSProjection.available() and PSRender.available() and not PSSetup.active() and not C.blocked()
+end
+function C.tackle()
+    if not C.inputActive() or (C.lastTackle and now()-C.lastTackle<800) then return end
+    local p=player();local b=C.ball(C.selected)
+    if not b or (b.match and b.match.phase~='play') or math.floor(p:getZ())~=b.z then return end
+    local x,y=PSProjection.screenToWorld(0,getMouseX(),getMouseY(),b.z)
+    if not PSCore.finite(x) or not PSCore.finite(y) then return end
+    local dx,dy=x-p:getX(),y-p:getY()
+    if dx*dx+dy*dy<.00001 then return end
+    local length=math.sqrt(dx*dx+dy*dy)
+    C.charge=nil;C.lastTackle=now();C.guardInput(p)
+    C.send('tackle',{id=b.id,dx=dx/length,dy=dy/length})
 end
 function C.capture(button)
     -- Native capture affects key bindings, not the raw button used by our gauge.
@@ -139,7 +190,11 @@ function C.capture(button)
     Mouse.UIBlockButtonDown(button)
 end
 function C.guardInput(p)
-    if not C.guard then C.guard={player=p,previous=p:isBannedAttacking(),forceAim=p:isForceAim()} end
+    if not C.guard then
+        local previous=p:isBannedAttacking()
+        if C.spaceGuard and C.spaceGuard.player==p then previous=C.spaceGuard.previous end
+        C.guard={player=p,previous=previous,forceAim=p:isForceAim()}
+    end
     p:setBannedAttacking(true);p:nullifyAiming()
     if isMouseButtonDown(0) then C.capture(0) end
     if isMouseButtonDown(1) then C.capture(1) end
@@ -211,6 +266,7 @@ function C.openMenu()
     C.closeMenu();C.charge=nil;C.releaseGuard()
     local menu=ISContextMenu.get(0,math.floor(getCore():getScreenWidth()/2),math.floor(getCore():getScreenHeight()/3))
     C.menu=menu
+    C.control(false)
     menu:addOption(getText('UI_PS_SoccerMenu'),nil,nil).notAvailable=true
     menu:addOption(getText('UI_PS_Resume'),nil,C.closeMenu)
     if b.match then
@@ -228,14 +284,15 @@ function C.openMenu()
 end
 function C.update(p)
     if p~=player() then return end
+    if C.spaceGuard and (p:isDead() or not isKeyDown(Keyboard.KEY_SPACE)) then C.releaseSpace() end
     if C.menu and not C.menu:isVisible() then C.menu=nil end
     PSSetup.update()
-    local t=now();local previous=C.moveSample
-    C.moveSample={x=p:getX(),y=p:getY(),z=p:getZ(),at=t}
+    local t=now()
     if C.rightCaptured and not isMouseButtonDown(1) then C.rightUp() end
     if C.pendingItem and now()-(C.pendingAt or 0)>5000 then C.pendingItem=nil;C.pendingMode=nil;C.notice("UI_PS_StartFailed") end
     if C.inputActive() then C.guardInput(p)
     else C.charge=nil;C.releaseGuard() end
+    C.control(C.inputActive())
     if not C.ready() then C.charge=nil end
     if C.charge then
         if isMouseButtonDown(1-C.charge.button) then C.charge=nil
@@ -249,30 +306,6 @@ function C.update(p)
                     C.send("kick",{id=b.id,dx=x-b.x,dy=y-b.y,lob=charge.lob,power=PSCore.chargePower(now()-charge.at)})
                 end
             end
-        end
-    end
-    if previous and previous.z==p:getZ() and t-previous.at<=250 and C.inputActive()
-        and not C.charge and not isMouseButtonDown(0) and not isMouseButtonDown(1)
-        and (p:isRunning() or p:isSprinting())
-        and (not C.lastTouch or t-C.lastTouch>=400)
-        and (not C.lastDribbleRequest or t-C.lastDribbleRequest>=100) then
-        local b=C.ball(C.selected)
-        local dx,dy=p:getX()-previous.x,p:getY()-previous.y
-        local distance=dx*dx+dy*dy
-        -- This is intent acquisition, not a local kick. Include the displayed
-        -- interpolation and a small approach margin; the server still requires
-        -- actual .8-tile contact or a validated short swept contact.
-        local near=(p:getX()-b.x)^2+(p:getY()-b.y)^2<=1.6^2
-        if not near then
-            for _,shown in ipairs(C.positions()) do
-                if shown.id==b.id and (p:getX()-shown.x)^2+(p:getY()-shown.y)^2<=1.6^2 then near=true end
-            end
-        end
-        if b.z==math.floor(p:getZ()) and (not b.match or b.match.phase=='play')
-            and b.h==0 and b.vz==0 and PSRender.available() and PSProjection.available()
-            and near and distance>0.000001 and distance<1.5^2 then
-            local length=math.sqrt(distance);C.lastDribbleRequest=t
-            C.send("dribble",{id=b.id,dx=dx/length,dy=dy/length})
         end
     end
     if now()-C.lastSync>2000 then C.lastSync=now();C.send("sync",{}) end
@@ -305,8 +338,13 @@ local function ownsEscape()
 end
 function Overlay:onKeyPress(key)
     if key==Keyboard.KEY_ESCAPE then self.escapeConsumed=ownsEscape() and true or false end
+    if key==Keyboard.KEY_SPACE then
+        self.spaceConsumed=ownsEscape() and true or false
+        if self.spaceConsumed then C.captureSpace();C.tackle() end
+    end
 end
 function Overlay:onKeyRelease(key)
+    if key==Keyboard.KEY_SPACE then C.releaseSpace();return end -- retain UI latch after release
     if key~=Keyboard.KEY_ESCAPE then return end
     -- Native UIElement queries isKeyConsumed AFTER this callback. Retain the
     -- press latch even when leaving soccer clears selected/charge/setup.
@@ -314,7 +352,8 @@ function Overlay:onKeyRelease(key)
     if self.escapeConsumed then C.keyPressed(key) end
 end
 function Overlay:isKeyConsumed(key)
-    return key==Keyboard.KEY_ESCAPE and self.escapeConsumed==true
+    return (key==Keyboard.KEY_ESCAPE and self.escapeConsumed==true)
+        or (key==Keyboard.KEY_SPACE and self.spaceConsumed==true)
 end
 function Overlay:prerender() end -- HUD only; never draw ISPanel's fullscreen background.
 function Overlay:render()
@@ -322,6 +361,8 @@ function Overlay:render()
 end
 function C.reset()
     C.leave();C.rightUp();C.state={balls={}};C.samples={};C.revision=-1;C.receivedAt=nil;PSRender.clear()
+    C.releaseSpace()
+    C.fallSerials={};C.recoveryUntil=nil;C.lastTackle=nil
     if C.overlay then C.overlay:removeFromUIManager();C.overlay=nil end
 end
 Events.OnGameStart.Add(function()
@@ -351,5 +392,5 @@ Events.OnPostRender.Add(function()
         elseif ok and result==true then C.renderError=nil end
     else PSRender.clear() end
 end)
-Events.OnPlayerDeath.Add(function(p) if p==player() then C.leave() end end)
+Events.OnPlayerDeath.Add(function(p) if p==player() then C.leave();C.releaseSpace() end end)
 Events.OnMainMenuEnter.Add(C.reset)

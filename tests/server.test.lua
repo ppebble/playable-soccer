@@ -113,130 +113,149 @@ matchBall.x=100; matchBall.vx=1
 M.send(p,'reset',{id=2})
 assert(matchBall.x==5 and matchBall.vx==0 and matchBall.match.scoreA==1,'owner rescues stuck ball without clearing score')
 print('PASS soccer authoritative match setup, teams, lob, pause and SP snapshots')
-other.x=5; other.y=0; other.running=true; other.moving=true
-S.motion={}
-local initialSerial=matchBall.kickSerial
-M.send(other,'dribble',{id=2,dx=1,dy=0,power=1,lob=true})
-assert(matchBall.vx==6 and matchBall.vz==0 and matchBall.dribble,'running touch ignores client power and lob')
-assert(matchBall.kickSerial==initialSerial+1)
-S.command(other,'dribble',{id=2,dx=1,dy=0}); assert(matchBall.kickSerial==initialSerial+1,'dribble cooldown')
-local function denied(args,message)
-    local serial=matchBall.kickSerial
-    M.send(other,'dribble',args or {id=2,dx=1,dy=0})
-    assert(matchBall.kickSerial==serial,message)
+local function advance(seconds)
+    M.time=M.time+seconds*1000; M.tick()
 end
-other.running=false; denied(nil,'walking cannot auto dribble')
-other.sprinting=true; other.moving=false; denied(nil,'stationary run flag cannot dribble')
-other.moving=true
-denied({id=2,dx=0/0,dy=0},'NaN direction')
-denied({id=2,dx=2,dy=0},'oversized direction')
-denied({id=2,dx=-1,dy=0},'backward spoof against facing')
-matchBall.h=.01; denied(nil,'no airborne dribble'); matchBall.h=0
-matchBall.vz=.01; denied(nil,'no lifting ball touch'); matchBall.vz=0
-other.x=6; denied(nil,'contact range stricter than manual kick'); other.x=5
-other.z=1; denied(nil,'same floor required'); other.z=0
-matchBall.match.phase='goal'; denied(nil,'no goal-pause dribble'); matchBall.match.phase='play'
-other.x=5.2; matchBall.x=4.8
-M.wall=function(a,c) return a.x~=c.x end
-denied(nil,'wall blocks automatic touch'); M.wall=nil
-other.x=5; matchBall.x=5
-S.motion={}; M.time=M.time+600; M.tick()
--- Server observes westward movement while facing still points east.
-other.x=4.9; matchBall.x=4.9; M.time=M.time+100; M.tick()
+local function resetTest()
+    S.controls={};S.stunned={};S.motion={}
+    p.x=5;p.y=0;p.z=0;p.faceX=1;p.faceY=0;p.onFloor=false;p.knockedDown=false;p.stateName=nil
+    other.x=5;other.y=0;other.z=0;other.faceX=1;other.faceY=0
+    M.players={p,other};M.wall=nil
+    M.send(p,'reset',{id=2})
+    advance(.4)
+end
+local function register(who)
+    M.send(who,'control',{id=2,active=true})
+end
+local function heldBy(who)
+    return matchBall.possession and matchBall.possession.kind=='player' and matchBall.possession.key==who:getUsername()
+end
+-- SP fallback name is deliberate throughout this fixture.
+local ownerKey='local:0'
+resetTest();advance(.1)
+assert(not matchBall.possession,'nearby nonparticipants never pick up')
+register(p);advance(.05)
+assert(matchBall.possession and matchBall.possession.key==ownerKey,'selected participant acquires resting ball')
+local x=matchBall.x
+p.x=p.x+.1;advance(.05)
+assert(matchBall.x>x and matchBall.x-x<=.60001,'holder follow is bounded, not teleporting')
 local serial=matchBall.kickSerial
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(matchBall.kickSerial==serial,'measured movement overrides stale facing')
-M.time=M.time+401; other.x=4.8; matchBall.x=4.8; matchBall.h=0; matchBall.vz=0
-S.command(other,'dribble',{id=2,dx=-1,dy=0})
-assert(matchBall.vx==-6 and matchBall.kickSerial==serial+1,'sprinting dribble follows server-observed movement')
--- A scoring tick publishes the frozen state immediately even inside cadence.
-matchBall.x=9.98; matchBall.y=0; matchBall.h=0; matchBall.vz=0; matchBall.vx=16; matchBall.vy=0
-matchBall.match.crossings={}; S.lastTick=M.time/1000; S.lastPublish=M.time/1000
-local revision=S.revision
-M.time=M.time+10; M.tick()
-assert(matchBall.match.phase=='goal' and matchBall.vx==0 and S.revision>revision,'goal immediately freezes and publishes')
-local scoredX=matchBall.x
-M.time=M.time+100; M.tick()
-assert(matchBall.x==scoredX and matchBall.vx==0,'goal ball stays frozen until reset')
-print('PASS bounded running dribble authority and immediate goal freeze')
--- Rejected requests consume only the 80ms request budget, not touch cooldown.
-matchBall.match.phase='play'; matchBall.x=5; matchBall.y=0; matchBall.h=0; matchBall.vz=0; matchBall.vx=0
-other.x=6; other.y=0; other.running=true; other.sprinting=false; other.moving=true
-M.time=M.time+1000; S.motion={}
-serial=matchBall.kickSerial
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(matchBall.kickSerial==serial,'approach alone must not kick')
-M.time=M.time+100; other.x=5.6
-S.command(other,'dribble',{id=2,dx=-1,dy=0})
-assert(matchBall.kickSerial==serial+1,'rejected approach retries before400ms')
-M.time=M.time+100
-S.command(other,'dribble',{id=2,dx=-1,dy=0})
-assert(matchBall.kickSerial==serial+1,'accepted contact retains400ms cooldown')
-local function prepareSweep(startX)
-    M.time=M.time+1000; S.motion={}; matchBall.x=5; matchBall.y=0
-    matchBall.h=0; matchBall.vz=0; matchBall.vx=0; matchBall.vy=0
-    other.x=startX; other.y=0; other.moving=true; other.faceX=1
-    S.lastTick=M.time/1000; M.tick()
-    return matchBall.kickSerial
-end
-serial=prepareSweep(4.8)
-M.time=M.time+100; other.x=5.9; other.moving=false
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(matchBall.kickSerial==serial+1,'recent swept contact survives missed frame and delayed moving flag')
-serial=prepareSweep(4.8)
-M.time=M.time+200; other.x=5.9
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(matchBall.kickSerial==serial,'stale swept contact rejected')
-serial=prepareSweep(3.9)
-M.time=M.time+100; other.x=5.9
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(matchBall.kickSerial==serial,'teleport segment cannot grant contact')
-serial=prepareSweep(4.8)
-M.time=M.time+100; other.x=5.9
+M.send(other,'kick',{id=2,dx=1,dy=0,power=0})
+assert(matchBall.kickSerial==serial,'foreign player cannot shoot possessed ball')
+M.send(p,'kick',{id=2,dx=1,dy=0,power=0})
+assert(not matchBall.possession and matchBall.kickSerial==serial+1,'holder shot releases possession')
+matchBall.vx=0;matchBall.vy=0;matchBall.x=p.x
+advance(.2);assert(not matchBall.possession,'global pickup grace after shot')
+advance(.2);assert(not matchBall.possession,'shooter-specific grace exceeds global grace')
+advance(.25);assert(matchBall.possession,'shooter can regain after grace')
+M.send(p,'control',{id=2,active=false});assert(not matchBall.possession,'leaving mode releases immediately')
+resetTest();register(p);advance(.01)
+advance(3.1);assert(not matchBall.possession,'expired heartbeat releases')
+resetTest();register(p);advance(.01);M.players={other};advance(.1)
+assert(not matchBall.possession,'disconnect releases without deleting ball')
+resetTest();register(p);advance(.01);p.x=20;advance(.1)
+assert(not matchBall.possession and matchBall.x<7,'holder teleport never drags ball remotely')
+resetTest();register(p);advance(.01)
 M.wall=function(a,b) return a.x~=b.x end
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(matchBall.kickSerial==serial,'swept player path cannot cross wall')
+p.faceX=-1;S.motion={};advance(.1)
+assert(not matchBall.possession,'follow obstruction releases ball')
+resetTest();p.onFloor=true;register(p);advance(.1);assert(not matchBall.possession,'downed participant cannot acquire')
+p.onFloor=false;p.stateName='PlayerGetUpState';advance(.1);assert(not matchBall.possession,'get-up transition cannot acquire')
+p.stateName=nil;advance(.1);assert(matchBall.possession,'standing participant may acquire')
+-- Opponent tackle consumes cooldown even on a miss, then steals at close range.
+resetTest();register(p);register(other);advance(.01)
+assert(matchBall.possession.key==ownerKey)
+other.x=matchBall.x-.4;other.y=matchBall.y
+M.send(other,'tackle',{id=2,dx=-1,dy=0})
+assert(matchBall.possession.key==ownerKey,'wrong-direction tackle misses')
+S.command(other,'tackle',{id=2,dx=1,dy=0})
+assert(matchBall.possession.key==ownerKey,'miss consumes tackle cooldown')
+advance(.81);other.x=matchBall.x-.4;S.command(other,'tackle',{id=2,dx=1,dy=0})
+assert(heldBy(other) and S.stunned[ownerKey]>M.time/1000,'valid opponent tackle steals and stuns victim')
+local fall
+for _,packet in ipairs(M.packets) do if packet.command=='tackled' then fall=packet end end
+assert(fall and fall.args.id==2 and fall.args.serial==matchBall.tackleSerial,'victim receives dedicated fall event')
+serial=matchBall.kickSerial
+M.send(p,'kick',{id=2,dx=1,dy=0,power=0});assert(matchBall.kickSerial==serial,'stunned victim cannot shoot')
+resetTest();matchBall.match.teams.other='A';register(p);register(other);advance(.01)
+other.x=matchBall.x-.4
+M.send(other,'tackle',{id=2,dx=1,dy=0});assert(matchBall.possession.key==ownerKey,'teammate tackle is ignored')
+matchBall.match.teams.other='B'
+resetTest();register(p);advance(.01);other.x=matchBall.x-.4
+M.send(other,'tackle',{id=2,dx=1,dy=0});assert(matchBall.possession.key==ownerKey,'unregistered bystander cannot tackle')
+-- Configure creates independent clear test circles and reports unavailable sites.
+resetTest();M.send(p,'configure',config)
+local zones=matchBall.match.testZones
+assert(zones.tackle and zones.keeper and zones.tackle.r==.9)
+local keeper=zones.keeper
+advance(.4) -- Configuration/reset capture grace expires before the incoming pass.
+matchBall.x=keeper.x-.8;matchBall.y=keeper.y;matchBall.h=0;matchBall.vx=8;matchBall.vy=0
+advance(.01)
+assert(matchBall.possession and matchBall.possession.kind=='zone','keeper captures incoming loose pass even above player pickup speed')
+local captureX=matchBall.x;advance(.1);assert(matchBall.x==captureX,'keeper capture never teleports to center')
+other.x=matchBall.x-.4;other.y=matchBall.y;register(other)
+M.send(other,'tackle',{id=2,dx=1,dy=0})
+assert(heldBy(other),'registered player can steal from keeper zone')
+-- Wait past steal grace while still inside the keeper circle, then shoot out.
+advance(.65)
+assert(heldBy(other),'keeper does not take a held ball after steal grace')
+local shotX=matchBall.x
+M.send(other,'kick',{id=2,dx=1,dy=0,power=0})
+assert(not matchBall.possession,'keeper holder can release a shot')
+advance(.1)
+assert(not matchBall.possession and matchBall.x>shotX,'shot travels inside keeper zone during global capture grace')
+advance(.2)
+assert(not matchBall.possession,'keeper respects entire shot capture grace')
+resetTest();register(p);advance(.01)
+local tackleZone=matchBall.match.testZones.tackle
+-- Move a carried ball and holder into the test area without a remote follow.
+p.x=tackleZone.x;p.y=tackleZone.y;matchBall.x=p.x+.1;matchBall.y=p.y;S.motion={}
+advance(.05)
+assert(not matchBall.possession and S.stunned[ownerKey]>M.time/1000,'tackle zone knocks down entering holder')
+resetTest();register(p);advance(.01);M.send(p,'reset',{id=2})
+assert(not matchBall.possession and matchBall.x==5,'reset clears possession')
+resetTest();register(p);advance(.01)
+p.x=9.8;p.y=0;matchBall.x=9.8;matchBall.y=0;S.motion={}
+advance(.1)
+assert(matchBall.match.phase=='goal' and not matchBall.possession,'carried goal uses swept scoring and clears possession')
+advance(2.1);assert(matchBall.x==5 and not matchBall.possession,'goal restart remains loose with grace')
+resetTest();M.missing=function(x,y) return y>=3 end
+M.send(p,'configure',config)
+assert(matchBall.match.testZones.tackle and not matchBall.match.testZones.keeper,'unavailable keeper zone omitted independently')
+local unavailable=false
+for _,packet in ipairs(M.packets) do if packet.command=='notice' and packet.args.key=='UI_PS_TestZonesUnavailable' then unavailable=true end end
+assert(unavailable,'zone placement failure is communicated')
+M.missing=nil
+print('PASS possession participation, follow, shot release, tackle, stun and test zones')
+resetTest();S.command(p,'control',{id=2,active=true});advance(.01)
+assert(matchBall.possession)
+S.command(p,'control',{id=2,active=false})
+S.command(p,'control',{id=2,active=true})
+assert(not matchBall.possession and S.controls[ownerKey].id==2,'same-frame leave and return both apply')
+resetTest();p.x=4.8;matchBall.x=5.2
+M.wall=function(a,b) return a.x~=b.x end
+register(p);advance(.01)
+assert(not matchBall.possession,'nearby pickup cannot cross wall')
+resetTest();register(p);matchBall.h=.01;matchBall.vz=1;advance(.01)
+assert(not matchBall.possession,'airborne loose ball not automatically picked up')
+matchBall.h=0;matchBall.vz=0;matchBall.vx=8;matchBall.x=p.x;advance(.01)
+assert(not matchBall.possession,'fast loose shot not automatically picked up')
+resetTest();register(p);register(other);advance(.01)
+matchBall.x=5.2;other.x=4.8
+M.wall=function(a,b) return a.x~=b.x end
+M.send(other,'tackle',{id=2,dx=1,dy=0})
+assert(matchBall.possession.key==ownerKey,'tackle cannot cross wall')
 M.wall=nil
-serial=prepareSweep(4.8)
-M.time=M.time+100; other.x=5.9; matchBall.h=.01
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(matchBall.kickSerial==serial,'swept contact cannot touch airborne ball')
-serial=prepareSweep(5.8)
-M.time=M.time+100; other.x=6.5
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(matchBall.kickSerial==serial,'swept historical contact cannot kick remotely')
-print('PASS retry budget, accepted cooldown, swept contact and rejection boundaries')
-local function prepareSpeed(speed)
-    serial=prepareSweep(5)
-    other.running=true;other.sprinting=false;other.moving=true
-    M.time=M.time+100;other.x=5+speed*.1;matchBall.x=other.x
-    return serial
-end
-serial=prepareSpeed(1)
-S.command(other,'dribble',{id=2,dx=1,dy=0,speed=999,runnerSpeed=999})
-assert(matchBall.vx==6 and matchBall.kickSerial==serial+1,'slow measured runner retains6 baseline and ignores client speed')
-serial=prepareSpeed(8)
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(math.abs(matchBall.vx-10.5)<.00001,'runner8 gets authoritative10.5 ball speed')
-serial=prepareSpeed(11)
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(matchBall.vx==12,'measured fast runner capped at12')
-serial=prepareSpeed(8)
-S.lastTick=M.time/1000;M.tick() -- capture8 before command re-samples same position
-M.time=M.time+100
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(math.abs(matchBall.vx-10.5)<.00001,'fresh unchanged packet preserves measured speed')
-serial=prepareSpeed(8)
-S.lastTick=M.time/1000;M.tick();M.time=M.time+350
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(matchBall.vx==6,'stale measured speed discarded before facing fallback')
-serial=prepareSpeed(20)
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(matchBall.kickSerial==serial,'teleport cannot supply dribble speed even at current contact')
-M.time=M.time+100
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(matchBall.vx==6 and matchBall.kickSerial==serial+1,'later unmeasured contact does not inherit teleport speed')
-serial=prepareSweep(5);other.sprinting=true;other.running=false;other.moving=true
-S.command(other,'dribble',{id=2,dx=1,dy=0})
-assert(matchBall.vx==8.5,'unmeasured sprint uses bounded fallback')
-print('PASS authoritative measured dribble speed, fresh packet carry, stale/teleport rejection and fallback')
+resetTest();register(p);advance(.01)
+M.send(other,'start',{itemId=200})
+local second=S.balls[3];assert(second)
+S.command(p,'control',{id=3,active=true})
+assert(not matchBall.possession,'switching selected ball releases old possession')
+advance(.01)
+assert(second.possession and second.possession.key==ownerKey and not matchBall.possession,'one selected player owns only one ball')
+S.command(p,'control',{id=2,active=false})
+assert(S.controls[ownerKey].id==3,'stale leave for previous ball cannot cancel new control')
+local prior=S.revision
+S.command(p,'control',{id=3,active=true})
+assert(S.revision==prior,'same-selection heartbeat does not broadcast redundant state')
+print('PASS control transitions, single-ball ownership, wall and airborne pickup boundaries')

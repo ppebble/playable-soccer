@@ -20,7 +20,7 @@ public final class InputNativeTest {
         if(!(boolean)keyboard.getMethod("isKeyDown",int.class).invoke(null,10001)) throw new AssertionError("Next press must restore normal input");
         Class<?> p=Class.forName("zombie.characters.IsoPlayer",false,InputNativeTest.class.getClassLoader());
         p.getMethod("isForceAim");p.getMethod("setForceAim",boolean.class);p.getMethod("nullifyAiming");
-        for(String method:new String[]{"isPlayerMoving","isRunning","isSprinting"}) p.getMethod(method);
+        for(String method:new String[]{"isPlayerMoving","isRunning","isSprinting","isKnockedDown","isGettingUp"}) p.getMethod(method);
         Class.forName("zombie.ui.UIManager",false,InputNativeTest.class.getClassLoader()).getMethod("setRightDownObject",Class.forName("zombie.iso.IsoObject",false,InputNativeTest.class.getClassLoader()));
         System.out.println("PASS installed native mouse capture, raw charge input, next-press restore and guard API; live frame timing not tested");
         checkInstalledLuaPanel(Path.of(args[0]));
@@ -46,7 +46,7 @@ public final class InputNativeTest {
                 end}
                 UIManager.AddUI=function(ui) TEST.registered=TEST.registered+1 end
                 UIManager.RemoveElement=function(ui) end
-                PSRender={clear=function() end}
+                PSRender={clear=function() end,available=function() return true end}
                 """);
             Files.writeString(assertion,"""
                 assert(ISPanel.setConsumeMouseEvents==nil, 'Expected Java-only method; do not invent Lua wrapper')
@@ -91,6 +91,15 @@ public final class InputNativeTest {
                 TEST.typing=false;TEST.dead=true
                 ui:onKeyPress(esc);ui:onKeyRelease(esc)
                 assert(not ui:isKeyConsumed(esc))
+                TEST.dead=false;PSClient.receivedAt=TEST.time
+                local space=Keyboard.KEY_SPACE
+                PSClient.selected=1;ui:onKeyPress(space)
+                assert(ui:isKeyConsumed(space) and TEST.banned and TEST.sent[#TEST.sent].command=='tackle')
+                PSClient.leave();assert(TEST.banned,'held Space must not leak a shove on leaving')
+                ui:onKeyRelease(space)
+                assert(ui:isKeyConsumed(space) and not TEST.banned, 'Space UI press survives leaving; prior attack policy restored')
+                ui:onKeyPress(space);ui:onKeyRelease(space)
+                assert(not ui:isKeyConsumed(space), 'Next normal Space returns to vanilla')
                 -- A real vanilla panel's empty callbacks return nil, which the
                 -- native dispatch treats as consumption even with consume=false.
                 PSNativeBaseline=ISPanel:new(0,0,1600,900)
@@ -110,6 +119,7 @@ public final class InputNativeTest {
             Path repo=mod.toAbsolutePath().getParent().getParent().getParent().getParent();
             Object env=runNativeEnvironment(new String[]{repo.resolve("tests/client-bootstrap.lua").toString(),bootstrap.toString(),
                 "media/lua/shared/ISBaseObject.lua","media/lua/client/ISUI/ISUIElement.lua","media/lua/client/ISUI/ISPanel.lua",
+                mod.resolve("media/lua/shared/PS_Core.lua").toString(),
                 mod.resolve("media/lua/client/PS_Client.lua").toString(),assertion.toString()});
             checkNativeDispatch(nativeUI,env);
             System.out.println("PASS installed Lua HUD startup and actual native mouse dispatch/hit-test: baseline consumes RMB, zero-area production overlay passes buttons and inventory hit-testing; rendering stubbed, not live gameplay");

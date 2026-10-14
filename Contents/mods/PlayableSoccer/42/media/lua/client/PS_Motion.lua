@@ -46,4 +46,37 @@ function PSMotion.play(player, lob, dx, dy)
     if not ok then return false, 'unavailable' end
     return played, reason
 end
+-- A local animation/state request only. Soccer authority and downed duration
+-- stay on the server. Never call Hit, falling damage, or drop equipment here.
+
+local M=PSMotion
+local standing={idle=true,movement=true,run=true,sprint=true,aim=true,
+    ["aim-sneak"]=true,["aim-strafe"]=true,slowidleblend=true,
+    turningIdle180=true,turningMovement180=true,turningAim180=true}
+function M.isDown(p)
+    if not p then return false end
+    local state=p:getCurrentActionContextStateName()
+    return p:isKnockedDown() or p:isOnFloor() or state=="knockeddown"
+        or state=="getup" or state=="falldown" or state=="falling" or state=="onground"
+end
+function M.fall(p)
+    -- Avoid taking ownership of a climb, furniture, vehicle, action or an
+    -- existing real injury. Remote players retain their native network owner.
+    if not p or not p:isLocalPlayer() or p:isDead() or p:getVehicle()
+        or M.isDown(p) or p:getIgnoreMovement() or p:isSitOnGround()
+        or p:isSittingOnFurniture() or p:hasHitReaction()
+        or p:getVariableBoolean("bGetUpFromFall")
+        or not standing[p:getCurrentActionContextStateName()] then return false end
+    p:setRunning(false)
+    p:setSprinting(false)
+    p:setMoving(false)
+    p:setHitFromBehind(false)
+    p:setFallOnFront(false)
+    -- The registered bKnockedDown callback enters the installed knockeddown
+    -- graph; fallSit selects the backward reaction when fromBehind is false.
+    -- Native state enter/exit own movement locking and the getup transition.
+    p:setKnockedDown(true)
+    return true
+end
+
 return PSMotion

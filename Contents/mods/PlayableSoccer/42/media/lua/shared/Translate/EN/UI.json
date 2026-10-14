@@ -3,7 +3,7 @@
   "UI_PS_JoinBall": "Play with nearby soccer ball",
   "UI_PS_LeaveBall": "Leave soccer controls",
   "UI_PS_StopBall": "End my practice / match",
-  "UI_PS_Controls": "LMB: pass/shot · RMB: high lob · hold to charge, release to kick · Esc: soccer menu",
+  "UI_PS_Controls": "LMB: pass/shot · RMB: lob · Space: tackle · Esc: soccer menu",
   "UI_PS_RenderError": "The soccer ball could not be displayed. Check that 3D ground items are enabled; you can end practice from the right-click menu.",
   "UI_PS_TooManyBalls": "The server has reached the practice ball limit. End an existing practice first.",
   "UI_PS_StartFailed": "Practice did not start. Keep the sports ball in your main inventory and stand on clear ground.",
@@ -32,5 +32,12 @@
   "UI_PS_Resume": "Continue",
   "UI_PS_JoinMatch": "Join an active match",
   "UI_PS_SetupWaiting": "Checking goal positions…",
-  "UI_PS_SetupTimeout": "No response. Draw goal 1 again or press Esc to cancel."
+  "UI_PS_SetupTimeout": "No response. Draw goal 1 again or press Esc to cancel.",
+  "UI_PS_FreeBall": "Loose ball · approach to control it",
+  "UI_PS_Possession": "Possession: %1 · hold to charge, release to kick",
+  "UI_PS_ZonePossession": "Test opponent has the ball · approach and press Space to tackle",
+  "UI_PS_TackleZone": "TACKLE ZONE · enter while controlling the ball",
+  "UI_PS_KeeperZone": "OPPONENT ZONE · send ball in, tackle with Space",
+  "UI_PS_TestZonesUnavailable": "Some test zones could not fit on clear ground. Redraw goals in an open area.",
+  "UI_PS_Tackled": "Tackled! Possession lost."
 }

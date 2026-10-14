@@ -81,3 +81,21 @@ PSSetup.menu(0,menu,PSClient)
 check(menu.options.UI_PS_TeamB~=nil,"team menu reachable after leaving mouse capture")
 local option=menu.options.UI_PS_TeamB;option.fn(option.target)
 check(PSClient.selected==1 and TEST.commands[#TEST.commands].args.team=="B","team selection resumes controls")
+
+TEST.ball.match.phase="play"
+TEST.ball.match.testZones={tackle={x=1,y=3,r=1.25},keeper={x=9,y=3,r=1.25}}
+TEST.ball.possession={kind="zone",key="keeper"}
+TEST.texts={};TEST.draws={};PSHUD.render(TEST.panel,PSClient)
+local tackleZone,keeperZone,zoneOwner=false,false,false
+for _,entry in ipairs(TEST.texts) do
+    if entry.text=="UI_PS_TackleZone" then tackleZone=true end
+    if entry.text=="UI_PS_KeeperZone" then keeperZone=true end
+    if entry.text=="UI_PS_ZonePossession" then zoneOwner=true end
+end
+check(tackleZone and keeperZone and zoneOwner,"both world zones and simulated possession labeled")
+check(#TEST.draws>=98,"both zone perimeters rendered without interactive UI panels")
+TEST.ball.possession={kind="player",key="owner"};TEST.texts={}
+PSHUD.render(TEST.panel,PSClient)
+local holder=false
+for _,entry in ipairs(TEST.texts) do if entry.text=="UI_PS_Possessionowner" then holder=true end end
+check(holder,"server holder name displayed")

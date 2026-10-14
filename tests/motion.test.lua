@@ -21,3 +21,23 @@ TEST.dead=true;TEST.stopped=false;lob:update();assert(TEST.stopped);TEST.dead=ni
 lob:perform();assert(#TEST.queue.queue==0)
 TEST.error=true;TEST.stopped=false;lob:start();assert(TEST.stopped)
 print('PASS soccer cosmetic motion queue isolation, cancellation, inherited cleanup and error fallback')
+
+assert(PSMotion.fall(motionPlayer))
+assert(MOTION.knocked and not MOTION.front and not MOTION.behind)
+assert(MOTION.running==false and MOTION.sprinting==false and MOTION.moving==false)
+assert(PSMotion.isDown(motionPlayer))
+assert(not PSMotion.fall(motionPlayer))
+for _,flag in ipairs({"dead","vehicle","floor","locked","sitting","furniture","hit","fallRecovery"}) do
+    MOTION={state="idle",localPlayer=true};MOTION[flag]=true
+    assert(not PSMotion.fall(motionPlayer),flag)
+    assert(MOTION.knocked==nil)
+end
+for _,state in ipairs({"climbfence","climbwindow","actions","falling","getup","onground","falldown"}) do
+    MOTION={state=state,localPlayer=true}
+    assert(not PSMotion.fall(motionPlayer),state)
+end
+MOTION={state="idle",localPlayer=false};assert(not PSMotion.fall(motionPlayer))
+MOTION={state="getup",localPlayer=true};assert(PSMotion.isDown(motionPlayer))
+MOTION={state="run",localPlayer=true};assert(PSMotion.fall(motionPlayer))
+assert(not PSMotion.fall(nil) and not PSMotion.isDown(nil))
+print("PASS local native knockdown request and competing-state guards; animation playback not run")
