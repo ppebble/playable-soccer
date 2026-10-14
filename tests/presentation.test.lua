@@ -35,7 +35,7 @@ check(PSSetup.active() and not PSSetup.pending.submitted and #PSSetup.pending.po
 PSSetup.pending.submitted=TEST.time;TEST.time=TEST.time+5001;PSSetup.update()
 check(PSSetup.active() and not PSSetup.pending.submitted,"lost reply allows retry")
 PSSetup.cancel();TEST.time=1000
-PSClient.selected=1;PSClient.charge={at=550,lob=true};PSClient.message="hello";PSClient.messageUntil=2000
+PSClient.selected=1;PSClient.charge={at=775,lob=true};PSClient.message="hello";PSClient.messageUntil=2000
 PSHUD.render(TEST.panel,PSClient)
 local title,bar,message=false,false,false
 for _,t in ipairs(TEST.texts) do
@@ -45,11 +45,11 @@ end
 bar=TEST.bar.x==490 and TEST.bar.y==95 and TEST.bar.w==300 and TEST.bar.power==.5
 check(title and message,"title and message twelve o'clock")
 check(bar,"half-charge visible at top center")
-PSClient.charge.at=TEST.time-900;PSHUD.render(TEST.panel,PSClient)
+PSClient.charge.at=TEST.time-450;PSHUD.render(TEST.panel,PSClient)
 check(TEST.bar.power==1 and TEST.bar.color.r==1,"full charge uses maximum color")
 PSClient.charge.at=TEST.time-9000;PSHUD.render(TEST.panel,PSClient)
 check(TEST.bar.power==1,"holding beyond maximum never overfills")
-PSClient.charge.lob=false;PSClient.charge.at=TEST.time-720;TEST.texts={}
+PSClient.charge.lob=false;PSClient.charge.at=TEST.time-360;TEST.texts={}
 PSHUD.render(TEST.panel,PSClient)
 local lifted=false
 for _,t in ipairs(TEST.texts) do if string.find(t.text,"UI_PS_LowShot",1,true) then lifted=true end end

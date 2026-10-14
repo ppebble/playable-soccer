@@ -115,7 +115,7 @@ function C.receive(command,args)
             if prior and b.dribble and b.kickSerial and b.kickSerial~=(prior.b.kickSerial or 0)
                 and player() and b.kicker==owner(player()) then C.lastTouch=t end
             if prior and not b.dribble and b.kickSerial and b.kickSerial~=(prior.b.kickSerial or 0) and player() and b.kicker==owner(player()) then
-                PSMotion.play(player(),b.lob==true,b.kickDx,b.kickDy)
+                PSMotion.play(player(),b.lob==true,b.kickDx,b.kickDy,b.kickPower)
             end
             if C.pendingItem==b.itemId and player() and b.owner==owner(player()) then
                 if C.pendingMode=='match' then setupId=b.id else C.selected=b.id end

@@ -73,3 +73,26 @@ assert(PSMotion.tackle(motionPlayer,1,0));tackle=TEST.queue.queue[1];tackle.acti
 TEST.error=true;TEST.stopped=false;tackle:start();assert(TEST.stopped);TEST.error=nil
 tackle:perform();assert(#TEST.queue.queue==0)
 print('PASS shoulder gesture queue, movement, cancellation, direction and inherited cleanup')
+-- Animation selection uses only accepted normalized server power.
+TEST.queue.queue={};TEST.error=nil;TEST.moving=nil;TEST.dead=nil;TEST.vehicle=nil;TEST.localPlayer=true
+for _,case in ipairs({{power=.899,strong=false},{power=.9,strong=true},{power=1,strong=true},
+    {power=-1,strong=false},{power=1.001,strong=false},{power=math.huge,strong=false},
+    {power=0/0,strong=false},{power='1',strong=false},{strong=false}}) do
+    for _,lob in ipairs({false,true}) do
+        assert(PSMotion.play(TEST.player,lob,1,0,case.power))
+        local kick=TEST.queue.queue[1];kick.action=TEST.native;kick:start()
+        assert(TEST.anim==(case.strong and 'PS_StrongKickGesture' or 'PS_KickGesture'))
+        assert(kick.maxTime==32 and kick.stopOnWalk==not case.strong and kick.stopOnRun==not case.strong and kick.stopOnAim)
+        assert(kick.stop==ISBaseTimedAction.stop and kick.perform==ISBaseTimedAction.perform)
+        kick:perform()
+    end
+end
+print('PASS accepted-power strong/light variant boundaries and unchanged action cleanup')
+TEST.moving=true
+assert(not PSMotion.play(TEST.player,false,1,0,.899)) -- light behavior unchanged
+assert(PSMotion.play(TEST.player,false,1,0,.9))
+local movingStrong=TEST.queue.queue[1];movingStrong.action=TEST.native;movingStrong:start()
+TEST.stopped=false;movingStrong:update()
+assert(not TEST.stopped and TEST.block==false and TEST.anim=='PS_StrongKickGesture')
+assert(not PSMotion.play(TEST.player,false,1,0,1)) -- never displace queued actions
+movingStrong:perform();TEST.moving=nil

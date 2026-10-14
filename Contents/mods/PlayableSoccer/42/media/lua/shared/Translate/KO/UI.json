@@ -26,7 +26,7 @@
   "UI_PS_LineInvalid": "골대 선은 2~10칸이어야 합니다. 끝점을 다시 선택하세요.",
   "UI_PS_ChargeReady": "킥 게이지 · 마우스를 누르고 충전",
   "UI_PS_ChargeMax": "최대 · 떼면 킥",
-  "UI_PS_ChargeRange": "최대 충전 0.9초 · 좌클릭 약 24칸 / 로빙 약 28칸 (평지)",
+  "UI_PS_ChargeRange": "최대 충전 0.45초 · 좌클릭 약 24칸 / 로빙 약 28칸 (평지)",
   "UI_PS_LowShot": "낮게 뜨는 슛",
   "UI_PS_SoccerMenu": "축구 메뉴",
   "UI_PS_Resume": "계속하기",

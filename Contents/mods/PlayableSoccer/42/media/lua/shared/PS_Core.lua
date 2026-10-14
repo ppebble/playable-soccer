@@ -8,7 +8,7 @@ C.airDrag = 0
 C.maxSpeed = math.sqrt(2*C.groundDrag*C.maxDistance)
 C.kickRange = 1.4
 C.dribbleRange = .8
-C.chargeMilliseconds = 900
+C.chargeMilliseconds = 450
 function C.chargePower(elapsed)
     return math.min(1,math.max(0,elapsed/C.chargeMilliseconds))
 end

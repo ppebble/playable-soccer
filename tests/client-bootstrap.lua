@@ -44,7 +44,7 @@ ISContextMenu={get=function()
     return menu
 end}
 PSHUD={render=function() TEST.hudRendered=true end}
-PSMotion={play=function(p,lob,dx,dy) TEST.motions=(TEST.motions or 0)+1;TEST.motionLob=lob end}
+PSMotion={play=function(p,lob,dx,dy,power) TEST.motions=(TEST.motions or 0)+1;TEST.motionLob=lob;TEST.motionPower=power end}
 PSMotion.fall=function(p) assert(p==TEST.player);TEST.falls=(TEST.falls or 0)+1 end
 PSMotion.isDown=function(p) return TEST.down or TEST.onFloor end
 PSMotion.tackleMilliseconds=500

@@ -139,3 +139,7 @@ local elevated=C.newBall(0,0,0); elevated.h=.3; C.kick(elevated,1,0,.5,true)
 for i=1,2000 do C.step(elevated,.01) end
 assert(math.abs(elevated.x-(.65+27.35*.5^1.4))<.001,'initial elevation preserves selected range')
 print('PASS continuous airborne momentum through all descents and rebounds')
+
+assert(C.chargePower(225)==.5,'half charge takes225ms')
+assert(C.chargePower(405)==.9,'power shot threshold takes405ms')
+assert(C.chargePower(450)==1 and C.chargePower(900)==1,'full charge takes450ms and stays capped')

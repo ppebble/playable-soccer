@@ -7,13 +7,13 @@ require 'TimedActions/ISTimedActionQueue'
 PS_KickAction = ISBaseTimedAction:derive('PS_KickAction')
 function PS_KickAction:isValid()
     local p = self.character
-    return p and not p:isDead() and not p:getVehicle() and not p:isMoving()
+    return p and not p:isDead() and not p:getVehicle() and (self.strong or not p:isMoving())
 end
 function PS_KickAction:start()
     local ok = pcall(function()
         self.action:setUseProgressBar(false)
         self.action:setBlockMovementEtc(false)
-        self:setActionAnim('PS_KickGesture')
+        self:setActionAnim(self.animName)
     end)
     if not ok then self:forceStop() end
 end
@@ -22,21 +22,24 @@ function PS_KickAction:update()
 end
 function PS_KickAction:animEvent(event, parameter) end
 function PS_KickAction:adjustMaxTime(time) return time end
-function PS_KickAction:new(player)
+function PS_KickAction:new(player, power)
     local o = ISBaseTimedAction.new(self, player)
     -- 5920/4800 seconds at 1.5 speed plus blend-out fits in 32 ticks.
     o.maxTime = 32
-    o.stopOnWalk, o.stopOnRun, o.stopOnAim = true, true, true
+    local strong=type(power)=='number' and power==power and power>=.9 and power<=1
+    o.strong=strong
+    o.animName=strong and 'PS_StrongKickGesture' or 'PS_KickGesture'
+    o.stopOnWalk, o.stopOnRun, o.stopOnAim = not strong, not strong, true
     return o
 end
 
 PSMotion = {}
-function PSMotion.play(player, lob, dx, dy)
+function PSMotion.play(player, lob, dx, dy, power)
     -- Only the local accepted kicker queues an action. B42 replicates native
     -- action animation; observers must not queue actions for other players.
     local ok, played, reason = pcall(function()
         if not player or not player:isLocalPlayer() then return false, 'player' end
-        local action = PS_KickAction:new(player)
+        local action = PS_KickAction:new(player, power)
         if not action:isValid() then return false, 'state' end
         local queue = ISTimedActionQueue.getTimedActionQueue(player)
         if not queue or not queue.queue or #queue.queue > 0 then return false, 'busy' end

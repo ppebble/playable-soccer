@@ -100,7 +100,7 @@ local snapshot=M.packets[#M.packets].args.balls[1].match
 snapshot.center.x=99; snapshot.teams.other='A'
 assert(matchBall.match.center.x==5 and matchBall.match.teams.other=='B','SP packets must not alias nested authoritative state')
 M.send(other,'kick',{id=2,dx=1,dy=0,power=1,lob=true})
-assert(matchBall.vz>0 and matchBall.lob and matchBall.kicker=='other' and matchBall.kickSerial==1,'accepted lob and kicker metadata')
+assert(matchBall.vz>0 and matchBall.lob and matchBall.kickPower==1 and matchBall.kicker=='other' and matchBall.kickSerial==1,'accepted lob and kicker metadata')
 matchBall.x=9.8; matchBall.h=0; matchBall.vz=0; matchBall.vx=16; matchBall.vy=0
 S.lastTick=M.time/1000; M.time=M.time+100; M.tick()
 assert(matchBall.match.phase=='goal' and matchBall.match.scoreA==1)
@@ -303,3 +303,11 @@ local beforeTeleport=matchBall.x;p.x=p.x+20;advance(.01)
 assert(not matchBall.possession and matchBall.x==beforeTeleport,'large teleport cannot drag the ball')
 matchBall.match=originalMatch
 print('PASS sustained sprint, batched updates, sharp turn, corrections, lag expiry and teleport boundaries')
+
+M.send(p,'reset',{id=2});p.x=matchBall.x;p.y=matchBall.y
+M.send(p,'kick',{id=2,dx=1,dy=0,power=.9,lob=false})
+assert(matchBall.kickPower==.9,'server publishes accepted high shot power')
+M.send(p,'kick',{id=2,dx=1,dy=0,power=2,lob=false})
+assert(matchBall.kickPower==.9,'rejected power cannot change animation metadata')
+M.send(p,'kick',{id=2,dx=1,dy=0,power=.2,lob=true})
+assert(matchBall.kickPower==.2,'light kick replaces previous strong power metadata')

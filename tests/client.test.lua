@@ -8,7 +8,7 @@ assert(TEST.sent[1].command=="start" and TEST.sent[1].args.itemId==17)
 assert(C.isItemActive(TEST.player,item))
 C.receive("state",state(1));assert(C.selected==1)
 TEST.buttons[0]=true;C.mouseDown();assert(C.charge)
-TEST.time=1450;TEST.buttons[0]=false;C.update(TEST.player)
+TEST.time=1225;TEST.buttons[0]=false;C.update(TEST.player)
 assert(TEST.sent[#TEST.sent].command=="kick" and TEST.sent[#TEST.sent].args.power==0.5)
 assert(TEST.sent[#TEST.sent].args.lob==false and TEST.sent[#TEST.sent].args.dx==7)
 assert(TEST.banned)
@@ -16,7 +16,7 @@ TEST.buttons[0]=true;C.mouseDown();TEST.buttons[1]=true;C.update(TEST.player);as
 TEST.buttons[1]=false
 TEST.buttons[0]=false
 TEST.buttons[1]=true;C.rightDown();assert(C.charge.lob and C.charge.button==1 and TEST.captured[1])
-TEST.time=TEST.time+450;TEST.buttons[1]=false
+TEST.time=TEST.time+225;TEST.buttons[1]=false
 ISObjectClickHandler.rdownObject={};TEST.rightObject={};C.rightUp()
 assert(ISObjectClickHandler.rdownObject==nil and TEST.rightObject==nil)
 C.update(TEST.player);assert(TEST.sent[#TEST.sent].command=="kick" and TEST.sent[#TEST.sent].args.lob==true)
@@ -89,8 +89,8 @@ TEST.noProjection=true;C.mouseDown();assert(not C.charge);TEST.noProjection=fals
 C.leave();TEST.setup=true;C.mouseDown();assert(TEST.setupClicked and not C.charge)
 C.keyPressed(Keyboard.KEY_ESCAPE);assert(not TEST.setup)
 -- Accepted local kick serial triggers once; sync replay must not animate again.
-local accepted=state(9);accepted.balls[1].kickSerial=1;accepted.balls[1].kicker="test";accepted.balls[1].kickDx=1;accepted.balls[1].kickDy=0;accepted.balls[1].lob=true
-C.receive("state",accepted);assert(TEST.motions==1 and TEST.motionLob)
+local accepted=state(9);accepted.balls[1].kickSerial=1;accepted.balls[1].kicker="test";accepted.balls[1].kickDx=1;accepted.balls[1].kickDy=0;accepted.balls[1].lob=true;accepted.balls[1].kickPower=.9
+C.receive("state",accepted);assert(TEST.motions==1 and TEST.motionLob and TEST.motionPower==.9)
 C.receive("state",accepted);assert(TEST.motions==1)
 -- A match start is a setup transition only after its authoritative ball exists.
 C.leave();C.start(TEST.player,item,'match');assert(C.pendingMode=='match' and not C.selected)

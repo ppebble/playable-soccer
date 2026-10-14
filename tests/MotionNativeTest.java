@@ -6,6 +6,7 @@ public final class MotionNativeTest {
     public static void main(String[] args) throws Exception {
         verifyFall();
         verifyTackle(args[0]);
+        verifyStrongKick(args[0]);
         Class<?> nodeType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNode");
         Class<?> vars=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimationVariableSource");
         Class<?> source=Class.forName("zombie.core.skinnedmodel.advancedanimation.IAnimationVariableSource");
@@ -37,6 +38,35 @@ public final class MotionNativeTest {
         System.out.println("PASS native soccer gesture clip/bones, event-free node selection, bounded duration and action APIs; visual playback untested");
     }
 
+    private static void verifyStrongKick(String mod) throws Exception {
+        Class<?> nodeType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNode");
+        Class<?> vars=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimationVariableSource");
+        Class<?> source=Class.forName("zombie.core.skinnedmodel.advancedanimation.IAnimationVariableSource");
+        Path path=Path.of(mod,"media/AnimSets/player/actions/PS_StrongKickGesture.xml");
+        Object node=nodeType.getMethod("Parse",String.class).invoke(null,path.toString());
+        if(node==null || !"Bob_AttackFloorStamp_2Hheavy".equals(nodeType.getField("animName").get(node))) throw new AssertionError("Distinct heavy stamp clip required");
+        if(nodeType.getField("useDeferredMovement").getBoolean(node) || nodeType.getField("deferredRotationScale").getFloat(node)!=0) throw new AssertionError("Strong kick cannot drive root motion");
+        if(!((List<?>)nodeType.getField("events").get(node)).isEmpty()) throw new AssertionError("Strong kick must not trigger combat");
+        Object values=vars.getConstructor().newInstance();
+        for(String name:new String[]{"PS_StrongKickGesture","PS_KickGesture","PS_ShoulderTackle","Stomp","","Eat"}) {
+            vars.getMethod("setVariable",String.class,String.class).invoke(values,"PerformingAction",name);
+            boolean selected=(Boolean)nodeType.getMethod("checkConditions",source).invoke(node,values);
+            if(selected!=name.equals("PS_StrongKickGesture")) throw new AssertionError("Strong kick action condition leaks");
+        }
+        Set<String> bones=new HashSet<>();
+        for(Object weight:(List<?>)nodeType.getField("subStateBoneWeights").get(node)) bones.add((String)weight.getClass().getField("boneName").get(weight));
+        if(!bones.equals(Set.of("Bip01_Spine","Bip01_L_Thigh","Bip01_R_Thigh"))) throw new AssertionError("Strong kick body mask changed");
+        String clip=Files.readString(Path.of("media/anims_X/Bob/Bob_AttackFloorStamp_2Hheavy.x"));
+        for(String bone:bones) if(!clip.contains("Frame "+bone)) throw new AssertionError("Missing installed strong kick bone");
+        var rate=java.util.regex.Pattern.compile("AnimTicksPerSecond\\s*\\{\\s*(\\d+);").matcher(clip);
+        if(!rate.find()) throw new AssertionError("Missing strong kick timing");
+        var times=java.util.regex.Pattern.compile("(?m)^\\s*(\\d+);[34];").matcher(clip);
+        int last=0;while(times.find()) last=Math.max(last,Integer.parseInt(times.group(1)));
+        double speed=((Number)nodeType.getMethod("getSpeedScale",source).invoke(node,values)).doubleValue();
+        double blend=((Number)nodeType.getMethod("getBlendOutTime").invoke(node)).doubleValue();
+        if(last/Double.parseDouble(rate.group(1))/speed+blend>32.0/30) throw new AssertionError("Strong kick timeout truncates clip");
+        System.out.println("PASS strong kick native variant, body mask, no combat/root motion and duration; appearance untested");
+    }
     private static void verifyTackle(String mod) throws Exception {
         Class<?> nodeType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNode");
         Class<?> vars=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimationVariableSource");

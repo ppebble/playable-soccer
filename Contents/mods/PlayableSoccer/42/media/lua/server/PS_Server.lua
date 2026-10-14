@@ -365,7 +365,7 @@ function S.command(p,command,args)
         b.possession=nil;b.captureAfter=t+.35;b.shooter=key;b.shooterAfter=t+.6
         local length=math.sqrt(args.dx^2+args.dy^2)
         b.kickSerial=(b.kickSerial or 0)+1;b.kicker=key
-        b.kickDx=args.dx/length;b.kickDy=args.dy/length;b.lob=args.lob==true;b.dribble=false
+        b.kickDx=args.dx/length;b.kickDy=args.dy/length;b.kickPower=args.power;b.lob=args.lob==true;b.dribble=false
     end
     publishAll()
 end
