@@ -39,6 +39,11 @@ PSClient.charge.at=TEST.time-900;PSHUD.render(TEST.panel,PSClient)
 check(TEST.bar.power==1 and TEST.bar.color.r==1,"full charge uses maximum color")
 PSClient.charge.at=TEST.time-9000;PSHUD.render(TEST.panel,PSClient)
 check(TEST.bar.power==1,"holding beyond maximum never overfills")
+PSClient.charge.lob=false;PSClient.charge.at=TEST.time-720;TEST.texts={}
+PSHUD.render(TEST.panel,PSClient)
+local lifted=false
+for _,t in ipairs(TEST.texts) do if string.find(t.text,"UI_PS_LowShot",1,true) then lifted=true end end
+check(lifted,"left kick at eighty percent is labeled as a lifted shot")
 PSClient.charge=nil;PSHUD.render(TEST.panel,PSClient)
 check(TEST.bar.power==0,"idle gauge remains visible empty")
 TEST.draws={};TEST.ball.h=.6

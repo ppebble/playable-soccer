@@ -95,7 +95,7 @@ local snapshot=M.packets[#M.packets].args.balls[1].match
 snapshot.center.x=99; snapshot.teams.other='A'
 assert(matchBall.match.center.x==5 and matchBall.match.teams.other=='B','SP packets must not alias nested authoritative state')
 M.send(other,'kick',{id=2,dx=1,dy=0,power=1,lob=true})
-assert(matchBall.vz==PSCore.maxSpeed*.5/PSCore.tilesPerFloor and matchBall.lob and matchBall.kicker=='other' and matchBall.kickSerial==1)
+assert(matchBall.vz>0 and matchBall.lob and matchBall.kicker=='other' and matchBall.kickSerial==1,'accepted lob and kicker metadata')
 matchBall.x=9.8; matchBall.h=0; matchBall.vz=0; matchBall.vx=16; matchBall.vy=0
 S.lastTick=M.time/1000; M.time=M.time+100; M.tick()
 assert(matchBall.match.phase=='goal' and matchBall.match.scoreA==1)
@@ -112,7 +112,7 @@ other.x=5; other.y=0; other.running=true; other.moving=true
 S.motion={}
 local initialSerial=matchBall.kickSerial
 M.send(other,'dribble',{id=2,dx=1,dy=0,power=1,lob=true})
-assert(matchBall.vx==PSCore.minSpeed and matchBall.vz==0 and matchBall.dribble,'running touch ignores client power and lob')
+assert(matchBall.vx==6 and matchBall.vz==0 and matchBall.dribble,'running touch ignores client power and lob')
 assert(matchBall.kickSerial==initialSerial+1)
 S.command(other,'dribble',{id=2,dx=1,dy=0}); assert(matchBall.kickSerial==initialSerial+1,'dribble cooldown')
 local function denied(args,message)
@@ -143,7 +143,7 @@ S.command(other,'dribble',{id=2,dx=1,dy=0})
 assert(matchBall.kickSerial==serial,'measured movement overrides stale facing')
 M.time=M.time+401; other.x=4.8; matchBall.x=4.8; matchBall.h=0; matchBall.vz=0
 S.command(other,'dribble',{id=2,dx=-1,dy=0})
-assert(matchBall.vx==-PSCore.minSpeed and matchBall.kickSerial==serial+1,'sprinting dribble follows server-observed movement')
+assert(matchBall.vx==-6 and matchBall.kickSerial==serial+1,'sprinting dribble follows server-observed movement')
 -- A scoring tick publishes the frozen state immediately even inside cadence.
 matchBall.x=9.98; matchBall.y=0; matchBall.h=0; matchBall.vz=0; matchBall.vx=16; matchBall.vy=0
 matchBall.match.crossings={}; S.lastTick=M.time/1000; S.lastPublish=M.time/1000
@@ -201,3 +201,37 @@ M.time=M.time+100; other.x=6.5
 S.command(other,'dribble',{id=2,dx=1,dy=0})
 assert(matchBall.kickSerial==serial,'swept historical contact cannot kick remotely')
 print('PASS retry budget, accepted cooldown, swept contact and rejection boundaries')
+local function prepareSpeed(speed)
+    serial=prepareSweep(5)
+    other.running=true;other.sprinting=false;other.moving=true
+    M.time=M.time+100;other.x=5+speed*.1;matchBall.x=other.x
+    return serial
+end
+serial=prepareSpeed(1)
+S.command(other,'dribble',{id=2,dx=1,dy=0,speed=999,runnerSpeed=999})
+assert(matchBall.vx==6 and matchBall.kickSerial==serial+1,'slow measured runner retains6 baseline and ignores client speed')
+serial=prepareSpeed(8)
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(math.abs(matchBall.vx-10.5)<.00001,'runner8 gets authoritative10.5 ball speed')
+serial=prepareSpeed(11)
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(matchBall.vx==12,'measured fast runner capped at12')
+serial=prepareSpeed(8)
+S.lastTick=M.time/1000;M.tick() -- capture8 before command re-samples same position
+M.time=M.time+100
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(math.abs(matchBall.vx-10.5)<.00001,'fresh unchanged packet preserves measured speed')
+serial=prepareSpeed(8)
+S.lastTick=M.time/1000;M.tick();M.time=M.time+350
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(matchBall.vx==6,'stale measured speed discarded before facing fallback')
+serial=prepareSpeed(20)
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(matchBall.kickSerial==serial,'teleport cannot supply dribble speed even at current contact')
+M.time=M.time+100
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(matchBall.vx==6 and matchBall.kickSerial==serial+1,'later unmeasured contact does not inherit teleport speed')
+serial=prepareSweep(5);other.sprinting=true;other.running=false;other.moving=true
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(matchBall.vx==8.5,'unmeasured sprint uses bounded fallback')
+print('PASS authoritative measured dribble speed, fresh packet carry, stale/teleport rejection and fallback')

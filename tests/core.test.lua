@@ -45,29 +45,43 @@ assert(not C.step(paused,-1) and paused.x==0)
 C.step(paused,3600)
 assert(paused.x<=4,'wall clock stalls must not advance an hour of travel')
 print('PASS soccer core persistent physics')
-local lob=assert(C.newBall(0,0,0))
-assert(not C.kick(lob,1,0,1,'yes'),'lob must be boolean')
-assert(C.kick(lob,1,0,1,true) and lob.vz==C.maxSpeed*.5/C.tilesPerFloor)
-local peak=0
-for i=1,2000 do C.step(lob,.01); peak=math.max(peak,lob.h) end
-assert(peak>.45 and peak<.48 and lob.x>16 and lob.x<20,'maximum lob lands within a street pitch and stays below half a floor')
-assert(peak*C.tilesPerFloor>1.35 and peak*C.tilesPerFloor<1.44,'vertical floor units preserve the physical launch angle')
-assert(lob.h==0 and lob.vz==0 and lob.vx==0,'lob lands and eventually rests')
-local short=assert(C.newBall(0,0,0)); C.kick(short,1,0,.1,true)
-for i=1,2000 do C.step(short,.01) end
-assert(short.x<lob.x and short.h==0,'charge controls lob distance')
-for _,dt in ipairs({.01,.05,.25}) do
-    for _,loft in ipairs({false,true}) do
-        for _,power in ipairs({0,.5,1}) do
-            local shot=C.newBall(0,0,0); C.kick(shot,1,0,power,loft)
-            for i=1,math.ceil(20/dt) do C.step(shot,dt) end
-            assert(shot.vx==0 and shot.vy==0 and shot.h==0,'every normal shot settles')
-            assert(shot.x<=20,'full charge must not cross an entire neighborhood')
-            if power==0 then assert(shot.x>=1 and shot.x<=2,'weak click travels one to two tiles') end
-            if power==1 then assert(shot.x>=16,'strong kick retains useful street-pitch range') end
-        end
-    end
-end
 local frozen=C.newBall(5,0,0); frozen.h=.2; frozen.vx=10; frozen.vz=1; frozen.match={phase='goal'}
 C.step(frozen,.25)
 assert(frozen.x==5 and frozen.h==.2 and frozen.vx==0 and frozen.vz==0,'goal pause freezes client extrapolation including gravity')
+local invalid=C.newBall(0,0,0)
+assert(not C.kick(invalid,1,0,1,'yes'),'lob flag must be boolean')
+coreMeasurements={}
+for _,dt in ipairs({.01,.05,.25}) do
+    for _,loft in ipairs({false,true}) do
+        local ranges={}
+        for _,power in ipairs({0,.5,.8,1}) do
+            local shot=C.newBall(0,0,0); assert(C.kick(shot,1,0,power,loft))
+            local peak=0
+            for i=1,math.ceil(20/dt) do
+                C.step(shot,dt,nil,function(ball) peak=math.max(peak,ball.h) end)
+            end
+            local target=loft and (.65+17.75*power^1.4) or (1.5+16.9*power)
+            local targetPeak=loft and (.35+1.45*power) or (power>=.8 and (.02+.13*(power-.8)/.2) or 0)
+            assert(math.abs(shot.x-target)<.001,'charge must map to stopping distance independent of timestep/loft')
+            assert(math.abs(peak-targetPeak)<.02,'loft peak must match intended world-floor height')
+            assert(shot.vx==0 and shot.h==0 and shot.vz==0,'shots land and rest without deletion')
+            if power==1 then assert(shot.x>=18 and shot.x<=20,'full-range street soccer bound') end
+            if loft and power==0 then assert(peak>.33 and shot.x<.66,'right tap must rise high nearby') end
+            ranges[power]=shot.x
+            coreMeasurements[#coreMeasurements+1]=string.format('dt=%.2f %s p=%.1f distance=%.4f peak=%.4f',dt,loft and 'RIGHT' or 'LEFT',power,shot.x,peak)
+        end
+        if not loft then assert(math.abs(ranges[.5]-(ranges[0]+ranges[1])/2)<.001,'left half-charge is half-way in distance') end
+    end
+end
+local below=C.newBall(0,0,0); C.kick(below,1,0,.799,false); assert(below.vz==0,'left stays ground below80percent')
+local threshold=C.newBall(0,0,0); C.kick(threshold,1,0,.8,false); assert(threshold.vz>0,'left gains slight lift at80percent')
+local touch=C.newBall(0,0,0)
+assert(not C.dribble(touch,1,0,0/0) and not C.dribble(touch,1,0,-1) and not C.dribble(touch,1,0,13))
+assert(not C.dribble(touch,0,0,3) and not C.dribble(touch,math.huge,0,3))
+assert(C.dribble(touch,1,0,0) and touch.vx==6 and touch.vz==0,'minimum ground touch speed')
+assert(C.dribble(touch,1,0,5) and touch.vx==7.5,'touch outpaces running speed')
+assert(C.dribble(touch,1,0,12) and touch.vx==12,'touch speed is bounded')
+touch.h=.001; assert(not C.dribble(touch,1,0,5),'airborne contact prohibited')
+touch.h=0; touch.vz=.001; assert(not C.dribble(touch,1,0,5),'rising contact prohibited')
+touch.vz=0; touch.match={phase='goal'}; assert(not C.dribble(touch,1,0,5),'goal pause contact prohibited')
+print('PASS distance-based charge, high right lob, slight strong-left lift and running dribble')

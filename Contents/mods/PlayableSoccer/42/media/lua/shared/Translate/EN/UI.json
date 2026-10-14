@@ -3,7 +3,7 @@
   "UI_PS_JoinBall": "Play with nearby soccer ball",
   "UI_PS_LeaveBall": "Leave soccer controls",
   "UI_PS_StopBall": "End my soccer practice",
-  "UI_PS_Controls": "LMB: ground kick | RMB: lob | Hold to charge, release to kick | Esc: leave controls",
+  "UI_PS_Controls": "LMB: pass/shot · RMB: high lob · hold to charge, release to kick · Esc: leave controls",
   "UI_PS_RenderError": "The soccer ball could not be displayed. Check that 3D ground items are enabled; you can end practice from the right-click menu.",
   "UI_PS_TooManyBalls": "The server has reached the practice ball limit. End an existing practice first.",
   "UI_PS_StartFailed": "Practice did not start. Keep the sports ball in your main inventory and stand on clear ground.",
@@ -26,5 +26,6 @@
   "UI_PS_LineInvalid": "Goal lines must be 2–10 tiles long. Choose the endpoint again.",
   "UI_PS_ChargeReady": "Kick power · hold a mouse button",
   "UI_PS_ChargeMax": "MAX · release to kick",
-  "UI_PS_ChargeRange": "Full charge: 0.9s · max kick: about 18–20 tiles on level ground"
+  "UI_PS_ChargeRange": "Full charge: 0.9s · max kick: about 18–20 tiles on level ground",
+  "UI_PS_LowShot": "Low lifted shot"
 }

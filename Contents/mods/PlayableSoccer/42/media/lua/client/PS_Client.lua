@@ -65,7 +65,10 @@ function C.receive(command,args)
     for _,b in pairs(args.balls or {}) do
         if b.id and PSCore.finite(b.x) and PSCore.finite(b.y) and PSCore.finite(b.z) and PSCore.finite(b.h) then
             local prior=C.samples[b.id]
-            samples[b.id]={a=prior and prior.b or b,b=b,at=t,duration=prior and math.min(250,math.max(1,t-prior.at)) or 1}
+            local touched=prior and b.kickSerial and b.kickSerial~=(prior.b.kickSerial or 0)
+            -- Accepted touches immediately show the authoritative contact point.
+            -- The next ordinary snapshot starts there, never behind the ack.
+            samples[b.id]={a=not touched and prior and prior.b or b,b=b,at=t,duration=prior and math.min(250,math.max(1,t-prior.at)) or 1}
             if prior and b.dribble and b.kickSerial and b.kickSerial~=(prior.b.kickSerial or 0)
                 and player() and b.kicker==owner(player()) then C.lastTouch=t end
             if prior and not b.dribble and b.kickSerial and b.kickSerial~=(prior.b.kickSerial or 0) and player() and b.kicker==owner(player()) then

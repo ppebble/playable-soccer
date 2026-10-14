@@ -128,6 +128,11 @@ C.update(TEST.player)
 assert(#TEST.sent==attemptCount+1,'approach retries in100ms despite1.4sample-ready boundary')
 local ack=state(22,2.6);ack.balls[1].kickSerial=9;ack.balls[1].kicker='test';ack.balls[1].dribble=true
 C.receive('state',ack);assert(C.lastTouch==TEST.time)
+assert(C.positions()[1].x==2.6,'accepted touch snaps to authoritative contact immediately')
+local following=state(23,3);following.balls[1].kickSerial=9;following.balls[1].dribble=true
+TEST.time=20170;C.receive('state',following)
+assert(C.positions()[1].x==2.6,'following snapshot cannot jump behind contact ack')
+TEST.time=20195;assert(C.positions()[1].x>2.6 and C.positions()[1].x<3,'ordinary movement remains bounded interpolation')
 TEST.time=20220;TEST.x=2.7;C.moveSample={x=2.6,y=1,z=0,at=20200}
 attemptCount=#TEST.sent;C.update(TEST.player);assert(#TEST.sent==attemptCount,'accepted touch suppresses further retries')
 TEST.time=20520;TEST.x=2.8;C.moveSample={x=2.7,y=1,z=0,at=20500}

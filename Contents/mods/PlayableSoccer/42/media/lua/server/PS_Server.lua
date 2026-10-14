@@ -98,12 +98,14 @@ local function sampleMotion(p,t)
         local dx,dy=current.x-previous.x,current.y-previous.y
         local length=math.sqrt(dx*dx+dy*dy)
         if elapsed>0 and elapsed<=.75 and length>.0001 and length<=elapsed*12 then
-            current.dx=dx/length; current.dy=dy/length; current.movedAt=t
+            current.dx=dx/length; current.dy=dy/length; current.speed=math.min(12,length/elapsed); current.movedAt=t
             if elapsed<=.15 and length<=1.2 then
                 current.fromX=previous.x; current.fromY=previous.y; current.fromAt=previous.positionAt or previous.time
             end
-        elseif previous.movedAt and t-previous.movedAt<=.3 then
-            current.dx=previous.dx; current.dy=previous.dy; current.movedAt=previous.movedAt
+        elseif length<=.0001 and previous.movedAt and t>=previous.movedAt and t-previous.movedAt<=.3 then
+            current.dx=previous.dx; current.dy=previous.dy; current.speed=previous.speed; current.movedAt=previous.movedAt
+        elseif length>.0001 and (elapsed<=0 or length>elapsed*12) then
+            current.invalidMove=true
         end
         if length<=.0001 then
             current.positionAt=previous.positionAt or previous.time
@@ -122,6 +124,7 @@ local function dribbleDirection(p,args,t)
     if length<.0001 then return nil end
     local dx,dy=args.dx/length,args.dy/length
     local motion=sampleMotion(p,t)
+    if motion.invalidMove then return nil end
     if not p:isPlayerMoving() and not motion.dx then return nil end
     local sx,sy=motion.dx,motion.dy
     if not sx then sx=p:getForwardDirectionX(); sy=p:getForwardDirectionY() end
@@ -229,6 +232,7 @@ function S.command(p,command,args)
         local dx,dy=p:getX()-b.x,p:getY()-b.y
         if dx*dx+dy*dy>C.kickRange^2 then return end
         local kx,ky,power,lob=args.dx,args.dy,args.power,args.lob
+        local runnerSpeed
         local contactX,contactY=p:getX(),p:getY()
         if command=='dribble' then
             if b.h~=0 or b.vz~=0 or (rates.kick and t-rates.kick<.4)
@@ -238,10 +242,15 @@ function S.command(p,command,args)
             if not kx then return end
             contactX,contactY=contact(p,b,motion,t)
             if not contactX then return end
-            power=C.dribblePower; lob=false
+            runnerSpeed=motion.speed or (p:isSprinting() and 6 or 3.5)
+            lob=false
         end
         local bx,by,halt=S.collision(b,contactX,contactY,b.x,b.y)
-        if bx or by or halt or not C.kick(b,kx,ky,power,lob) then return end
+        if bx or by or halt then return end
+        local kicked
+        if command=='dribble' then kicked=C.dribble(b,kx,ky,runnerSpeed)
+        else kicked=C.kick(b,kx,ky,power,lob) end
+        if not kicked then return end
         local length=math.sqrt(kx*kx+ky*ky)
         b.kickSerial=(b.kickSerial or 0)+1; b.kicker=key
         b.kickDx=kx/length; b.kickDy=ky/length; b.lob=lob==true

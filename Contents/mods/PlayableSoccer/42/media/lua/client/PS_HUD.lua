@@ -36,7 +36,8 @@ function H.render(panel,C)
         panel:drawProgressBar(cx-barWidth/2,95,barWidth,18,power,color)
         local label=getText("UI_PS_ChargeReady")
         if C.charge then
-            label=getText(C.charge.lob and "UI_PS_Lob" or "UI_PS_Ground").."  "..tostring(math.floor(power*100)).."%"
+            local kind=C.charge.lob and "UI_PS_Lob" or (power>=.8 and "UI_PS_LowShot" or "UI_PS_Ground")
+            label=getText(kind).."  "..tostring(math.floor(power*100)).."%"
             if power>=1 then label=label.."  "..getText("UI_PS_ChargeMax") end
         end
         panel:drawTextCentre(label,cx,116,1,1,1,1,UIFont.Small)

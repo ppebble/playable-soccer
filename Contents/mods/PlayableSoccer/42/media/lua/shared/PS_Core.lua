@@ -1,12 +1,11 @@
 PSCore = PSCore or {}
 local C = PSCore
-C.minSpeed = 3
-C.maxSpeed = 10.5
+C.maxDistance = 18.4
 C.groundDrag = 3
-C.airDrag = 1.8
+C.airDrag = C.groundDrag
+C.maxSpeed = math.sqrt(2*C.groundDrag*C.maxDistance)
 C.kickRange = 1.4
 C.dribbleRange = .8
-C.dribblePower = 0
 C.chargeMilliseconds = 900
 function C.chargePower(elapsed)
     return math.min(1,math.max(0,elapsed/C.chargeMilliseconds))
@@ -32,10 +31,23 @@ function C.kick(b,dx,dy,power,lob)
         or (lob~=nil and type(lob)~='boolean') or power<0 or power>1 or math.abs(dx)>100000 or math.abs(dy)>100000 then return false end
     local length=math.sqrt(dx*dx+dy*dy)
     if length<.00001 or b.h>.35 then return false end
-    local speed=C.minSpeed+(C.maxSpeed-C.minSpeed)*power
-    -- Fixed 30-degree launch angle; power sets total launch speed.
-    local horizontal=lob and speed*.8660254 or speed
-    b.vx=dx/length*horizontal; b.vy=dy/length*horizontal; b.vz=lob and speed*.5/C.tilesPerFloor or 0
+    -- Charge controls travel distance, not speed. Equal air/ground drag keeps
+    -- the landing height independent from final horizontal stopping distance.
+    local distance=lob and (.65+(C.maxDistance-.65)*power^1.4) or (1.5+(C.maxDistance-1.5)*power)
+    local peak=0
+    if lob then peak=.35+1.45*power
+    elseif power>=.8 then peak=.02+.13*(power-.8)/.2 end
+    local speed=math.sqrt(2*C.groundDrag*distance)
+    b.vx=dx/length*speed; b.vy=dy/length*speed; b.vz=math.sqrt(2*C.gravity*peak)
+    return true
+end
+function C.dribble(b,dx,dy,runnerSpeed)
+    if not valid(b) or b.h~=0 or b.vz~=0 or (b.match and b.match.phase~='play')
+        or not C.finite(runnerSpeed) or runnerSpeed<0 or runnerSpeed>12 then return false end
+    if not C.kick(b,dx,dy,0,false) then return false end
+    local length=math.sqrt(dx*dx+dy*dy)
+    local speed=math.min(12,math.max(6,runnerSpeed+2.5))
+    b.vx=dx/length*speed; b.vy=dy/length*speed; b.vz=0
     return true
 end
 -- Collision callback checks each short segment. The optional third return value
@@ -50,7 +62,11 @@ function C.step(b,dt,collision,onSegment)
     local slice=dt/count
     for _=1,count do
         local fx,fy,fh=b.x,b.y,b.h
-        local tx,ty=b.x+b.vx*slice,b.y+b.vy*slice
+        local v=math.sqrt(b.vx*b.vx+b.vy*b.vy)
+        local travelTime=math.min(slice,v/C.groundDrag)
+        local travel=v*travelTime-.5*C.groundDrag*travelTime*travelTime
+        local scale=v>0 and travel/v or 0
+        local tx,ty=b.x+b.vx*scale,b.y+b.vy*scale
         local bx,by,halt=false,false,false
         if collision then bx,by,halt=collision(b,b.x,b.y,tx,ty) end
         if halt then b.vx=0; b.vy=0; b.vz=0; b.h=0; return true end

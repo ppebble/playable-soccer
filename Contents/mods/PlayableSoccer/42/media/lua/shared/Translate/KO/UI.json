@@ -3,7 +3,7 @@
   "UI_PS_JoinBall": "근처 축구공으로 플레이",
   "UI_PS_LeaveBall": "축구 조작에서 나가기",
   "UI_PS_StopBall": "내 축구 연습 종료",
-  "UI_PS_Controls": "좌클릭: 땅볼 · 우클릭: 로빙 · 길게 눌러 충전 후 떼면 킥 · Esc: 조작 해제",
+  "UI_PS_Controls": "좌클릭: 패스/슛 · 우클릭: 높은 로빙 · 길게 눌러 충전 후 떼면 킥 · Esc: 조작 해제",
   "UI_PS_RenderError": "축구공을 표시하지 못했습니다. 3D 바닥 아이템 표시 옵션을 확인하세요. 우클릭 메뉴에서 연습을 종료할 수 있습니다.",
   "UI_PS_TooManyBalls": "서버의 연습용 공 한도에 도달했습니다. 기존 연습을 먼저 종료하세요.",
   "UI_PS_StartFailed": "연습을 시작하지 못했습니다. 스포츠용 공을 주 인벤토리에 넣고 장애물이 없는 바닥에 서세요.",
@@ -26,5 +26,6 @@
   "UI_PS_LineInvalid": "골대 선은 2~10칸이어야 합니다. 끝점을 다시 선택하세요.",
   "UI_PS_ChargeReady": "킥 게이지 · 마우스를 누르고 충전",
   "UI_PS_ChargeMax": "최대 · 떼면 킥",
-  "UI_PS_ChargeRange": "최대 충전 0.9초 · 최대 킥 약 18~20칸 (평지)"
+  "UI_PS_ChargeRange": "최대 충전 0.9초 · 최대 킥 약 18~20칸 (평지)",
+  "UI_PS_LowShot": "낮게 뜨는 슛"
 }
