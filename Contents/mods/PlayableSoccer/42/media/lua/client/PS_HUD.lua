@@ -43,6 +43,11 @@ function H.render(panel,C)
         panel:drawTextCentre(label,cx,116,1,1,1,1,UIFont.Small)
         panel:drawTextCentre(getText("UI_PS_ChargeRange"),cx,140,.8,.85,.9,1,UIFont.Small)
     end
+    if PSSetup.pending then
+        local pending=PSSetup.pending
+        local key=pending.submitted and "UI_PS_SetupWaiting" or ("UI_PS_Place"..tostring(#pending.points+1))
+        panel:drawTextCentre(getText(key),cx,60,1,.95,.78,1,UIFont.Small)
+    end
     if C.message and getTimestampMs()<(C.messageUntil or 0) then
         panel:drawTextCentre(C.message,cx,selected and 178 or 30,1,.85,.4,1,UIFont.Small)
     end

@@ -21,10 +21,20 @@ check(#PSSetup.pending.points==1 and #TEST.commands==0,"short goal line retries 
 TEST.mx=50;PSSetup.click(0)
 TEST.my=120;PSSetup.click(0)
 TEST.mx=10;PSSetup.click(0)
-check(not PSSetup.active() and #TEST.commands==1,"single submit after fourth point")
+check(PSSetup.active() and PSSetup.pending.submitted and #TEST.commands==1,"fourth point waits for server")
+PSSetup.click(0);check(#TEST.commands==1,"waiting cannot duplicate submit")
+PSSetup.receive("state",{});check(PSSetup.active(),"old state cannot complete setup")
+PSSetup.receive("notice",{key="UI_PS_GoalsReady"})
+PSSetup.receive("state",{});check(not PSSetup.active() and PSClient.selected==1,"accepted setup resumes controls")
 local sent=TEST.commands[1]
 check(sent.command=="configure" and sent.args.goalA.ax==1 and sent.args.goalB.bx==1 and sent.args.center.x==3 and sent.args.center.y==7,"goal lines and automatic midpoint sent")
-PSSetup.begin(1);PSSetup.click(1);check(not PSSetup.active(),"right cancel")
+PSSetup.begin(1);PSSetup.click(1);check(not PSSetup.active() and PSClient.selected==1,"right cancel resumes play")
+PSSetup.begin(1);PSSetup.pending.submitted=TEST.time
+PSSetup.receive("notice",{key="UI_PS_GoalsInvalid"})
+check(PSSetup.active() and not PSSetup.pending.submitted and #PSSetup.pending.points==0,"rejected placement retries directly")
+PSSetup.pending.submitted=TEST.time;TEST.time=TEST.time+5001;PSSetup.update()
+check(PSSetup.active() and not PSSetup.pending.submitted,"lost reply allows retry")
+PSSetup.cancel();TEST.time=1000
 PSClient.selected=1;PSClient.charge={at=550,lob=true};PSClient.message="hello";PSClient.messageUntil=2000
 PSHUD.render(TEST.panel,PSClient)
 local title,bar,message=false,false,false

@@ -1,5 +1,6 @@
 {
   "ContextMenu_PS_ConvertSports": "Convert to sports soccer ball",
   "ContextMenu_PS_ConvertBack": "Convert back to regular soccer ball",
-  "ContextMenu_PS_Start": "Start soccer practice (main inventory)"
+  "ContextMenu_PS_Start": "Free practice",
+  "ContextMenu_PS_CreateMatch": "Create match · draw two goals"
 }

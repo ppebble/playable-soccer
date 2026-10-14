@@ -79,7 +79,9 @@ TEST.typing=true;C.update(TEST.player);assert(TEST.forceAim and not TEST.banned)
 TEST.typing=false;TEST.forceAim=false;C.update(TEST.player)
 TEST.buttons[1]=true;C.rightDown();C.keyPressed(Keyboard.KEY_ESCAPE)
 assert(not C.charge and C.selected==1)
-C.keyPressed(Keyboard.KEY_ESCAPE);assert(not C.selected and not TEST.banned)
+C.keyPressed(Keyboard.KEY_ESCAPE);assert(C.menu and C.selected==1 and not TEST.banned and C.blocked())
+C.keyPressed(Keyboard.KEY_ESCAPE);assert(not C.menu and C.selected==1)
+C.leave()
 TEST.buttons[1]=false;ISObjectClickHandler.rdownObject={};C.rightUp();assert(not ISObjectClickHandler.rdownObject)
 local ordinaryClick={};ISObjectClickHandler.rdownObject=ordinaryClick;C.rightUp();assert(ISObjectClickHandler.rdownObject==ordinaryClick)
 C.selected=1;C.update(TEST.player);TEST.dead=true;C.update(TEST.player);assert(not C.guard and not TEST.banned);TEST.dead=false
@@ -141,3 +143,33 @@ C.lastTouch=nil;C.lastDribbleRequest=nil;TEST.time=25000;C.lastSync=TEST.time
 TEST.x=2.9;C.moveSample={x=2.8,y=1,z=0,at=24980}
 attemptCount=#TEST.sent;C.update(TEST.player);assert(#TEST.sent==attemptCount,'stale state never requests contact')
 print('PASS dribble acquisition, retries, accepted acknowledgment and freshness')
+-- A match start is a setup transition only after its authoritative ball exists.
+C.leave();C.start(TEST.player,item,'match');assert(C.pendingMode=='match' and not C.selected)
+C.receive('state',state(30));assert(TEST.setup==1 and not C.selected and not C.pendingMode)
+assert(TEST.setupReceived=='state')
+C.leave();assert(not TEST.setup)
+-- Synchronous singleplayer start acknowledgments must use the same ordering.
+local oldClient=isClient
+function isClient() return false end
+PSServer={command=function(p,command,args) assert(command=='start');C.receive('state',state(31)) end}
+C.start(TEST.player,item,'match');assert(TEST.setup==1 and not C.selected and not C.pendingItem)
+isClient=oldClient;PSServer=nil;C.leave()
+TEST.x=1;TEST.y=1;TEST.dead=false;TEST.typing=false
+local match=state(32);match.balls[1].match={phase='play'}
+C.receive('state',match);C.selected=1;C.update(TEST.player);C.charge={}
+C.openMenu();assert(C.menu and not C.guard and not C.charge and C.blocked())
+local function option(menu,key)
+    for _,o in ipairs(menu.options) do if o.label==key then return o end end
+end
+assert(option(C.menu,'UI_PS_ResetBall') and option(C.menu,'UI_PS_ConfigureGoals') and option(C.menu,'UI_PS_StopBall'))
+local team=option(C.menu,'UI_PS_TeamB');team.callback(team.target)
+assert(not C.menu and TEST.sent[#TEST.sent].command=='team' and TEST.sent[#TEST.sent].args.team=='B')
+C.openMenu();local resume=option(C.menu,'UI_PS_Resume');resume.callback();assert(not C.menu and C.selected==1)
+C.ball(1).owner='someone';C.openMenu()
+assert(not option(C.menu,'UI_PS_StopBall') and not option(C.menu,'UI_PS_ResetBall'))
+local leave=option(C.menu,'UI_PS_LeaveBall');leave.callback();assert(not C.menu and not C.selected)
+local nearby=ISContextMenu.get();C.joinMenu(nearby);assert(#nearby.options==2)
+nearby.options[2].callback();assert(C.selected==1 and TEST.sent[#TEST.sent].args.team=='B')
+C.openMenu();C.menu:hideAndChildren();C.update(TEST.player);assert(not C.menu,'outside-dismissed menu releases soccer block')
+C.openMenu();Events.OnPlayerDeath.callback(TEST.player);assert(not C.menu and not C.selected)
+print('PASS match start state ordering, SP reentrancy, soccer menu ownership/teams and cleanup')

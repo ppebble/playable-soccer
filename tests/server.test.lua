@@ -70,6 +70,10 @@ M.send(p,'start',{itemId=100}); assert(S.balls[2].owner=='local:0')
 M.send(p,'sync',{}); assert(M.packets[#M.packets].sp,'singleplayer response routing')
 print('PASS soccer server authority, collision and persistent session')
 local matchBall=S.balls[2]
+matchBall.x=8;matchBall.h=1;matchBall.vx=3
+M.send(other,'reset',{id=2});assert(matchBall.x==8,'practice reset owner only')
+M.send(p,'reset',{id=2})
+assert(matchBall.x==.5 and matchBall.h==0 and matchBall.vx==0,'practice reset restores original spawn')
 p.x=5; p.y=0; other.x=5; other.y=0
 local config={id=2,goalA={ax=0,ay=-2,bx=0,by=2},goalB={ax=10,ay=-2,bx=10,by=2},center={x=5,y=0}}
 M.send(other,'configure',config); assert(not matchBall.match,'owner-only setup')

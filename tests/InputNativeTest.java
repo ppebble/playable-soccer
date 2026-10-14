@@ -65,12 +65,15 @@ public final class InputNativeTest {
                 assert(#rects==2 and rects[1].w==150 and rects[2].x==160 and rects[2].w==150)
                 assert(ui.javaObject.setWantKeyEventsValue==true)
                 local esc=Keyboard.KEY_ESCAPE
+                PSClient.state={balls={{id=1,owner='test',x=1,y=1,z=0,h=0}}}
                 PSClient.selected=1
                 ui:onKeyPress(esc);assert(ui:isKeyConsumed(esc))
                 ui:onKeyRelease(esc)
-                assert(PSClient.selected==nil and ui:isKeyConsumed(esc), 'Exit press must not open vanilla menu')
+                assert(PSClient.selected==1 and PSClient.menu and ui:isKeyConsumed(esc), 'Soccer menu press must not open vanilla menu')
                 ui:onKeyPress(esc);ui:onKeyRelease(esc)
-                assert(not ui:isKeyConsumed(esc), 'Next Escape returns to vanilla menu')
+                assert(PSClient.selected==1 and not PSClient.menu and ui:isKeyConsumed(esc), 'Next Escape closes soccer menu')
+                PSClient.leave();ui:onKeyPress(esc);ui:onKeyRelease(esc)
+                assert(not ui:isKeyConsumed(esc), 'Escape outside soccer returns to vanilla menu')
                 PSClient.selected=1;PSClient.charge={}
                 ui:onKeyPress(esc);ui:onKeyRelease(esc)
                 assert(PSClient.charge==nil and PSClient.selected==1 and ui:isKeyConsumed(esc))

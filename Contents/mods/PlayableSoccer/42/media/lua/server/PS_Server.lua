@@ -197,6 +197,7 @@ function S.command(p,command,args)
         local b=C.newBall(p:getX(),p:getY(),p:getZ())
         if not b then return end
         S.serial=S.serial+1; b.id=S.serial; b.owner=key; b.itemId=item:getID()
+        b.spawn={x=b.x,y=b.y}
         S.balls[b.id]=b
     elseif command=='configure' then
         local b=integer(args.id) and S.balls[args.id]
@@ -215,9 +216,11 @@ function S.command(p,command,args)
         emit(p,'notice',{key='UI_PS_GoalsReady'})
     elseif command=='reset' then
         local b=integer(args.id) and S.balls[args.id]
-        if not b or b.owner~=key or not b.match or p:getZ()~=b.z then return end
-        if not clearPoint(b.match.center.x,b.match.center.y,b.z) then return end
-        PSMatch.reset(b)
+        if not b or b.owner~=key or p:getZ()~=b.z then return end
+        local center=b.match and b.match.center or b.spawn
+        if not center or not clearPoint(center.x,center.y,b.z) then return end
+        if b.match then PSMatch.reset(b)
+        else b.x=center.x;b.y=center.y;b.h=0;b.vx=0;b.vy=0;b.vz=0 end
         emit(p,'notice',{key='UI_PS_BallReset'})
     elseif command=='team' then
         local b=integer(args.id) and S.balls[args.id]

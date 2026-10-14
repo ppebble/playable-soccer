@@ -50,7 +50,7 @@ function Mock.player()
     return player
 end
 PSServer={isItemActive=function(player,item) return item.active == true end}
-PSClient={start=function(player,item) Mock.started=item end}
+PSClient={start=function(player,item,mode) Mock.started=item;Mock.mode=mode end,joinMenu=function() Mock.join=true end}
 function sendReplaceItemInContainer() Mock.sent=Mock.sent+1 end
 function replaceItemInContainer() end
 function sendEquip() Mock.equipped=Mock.equipped+1 end

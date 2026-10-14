@@ -6,7 +6,29 @@ local function owner(p)
     return name and name~="" and name or "local:"..tostring(p:getPlayerNum())
 end
 function S.active() return S.pending~=nil end
-function S.cancel() S.pending=nil end
+function S.cancel()
+    local pending=S.pending
+    S.pending=nil
+    if pending and PSClient.ball(pending.id) then PSClient.selected=pending.id end
+end
+function S.receive(command,args)
+    local pending=S.pending
+    if not pending or not pending.submitted then return end
+    if command=="notice" and args.key=="UI_PS_GoalsInvalid" then
+        pending.points={};pending.submitted=nil;pending.accepted=nil
+    elseif command=="notice" and args.key=="UI_PS_GoalsReady" then
+        pending.accepted=true
+    elseif command=="state" and pending.accepted then
+        S.cancel()
+    end
+end
+function S.update()
+    local pending=S.pending
+    if pending and pending.submitted and getTimestampMs()-pending.submitted>5000 then
+        pending.submitted=nil;pending.points={};pending.accepted=nil
+        PSClient.notice("UI_PS_SetupTimeout")
+    end
+end
 function S.validLine(a,b)
     if not a or not b then return false end
     local length=math.sqrt((b.x-a.x)^2+(b.y-a.y)^2)
@@ -23,6 +45,7 @@ function S.begin(id)
 end
 function S.click(button)
     if not S.pending then return false end
+    if S.pending.submitted then return true end
     if button~=0 then S.cancel();return true end
     local C,p=PSClient,getSpecificPlayer(0)
     if not p or C.blocked() then return true end
@@ -39,11 +62,12 @@ function S.click(button)
     if #points==4 then
         local center={x=(points[1].x+points[2].x+points[3].x+points[4].x)/4,
             y=(points[1].y+points[2].y+points[3].y+points[4].y)/4}
+        pending.submitted=getTimestampMs()
+        C.notice("UI_PS_SetupWaiting")
         C.send("configure",{id=pending.id,
             goalA={ax=points[1].x,ay=points[1].y,bx=points[2].x,by=points[2].y},
             goalB={ax=points[3].x,ay=points[3].y,bx=points[4].x,by=points[4].y},center=center})
-        C.selected=pending.id
-        S.cancel()
+
     else C.notice("UI_PS_Place"..tostring(#points+1)) end
     return true
 end

@@ -41,3 +41,13 @@ function context:addOption(label,target,fn,item) local o={label=label}; self.opt
 PS_BallMenu.fill(0,context,{replacement,{items={replacement}}})
 check(#context.options==1,"stacked context entries deduplicated")
 print("PASS conversion round trip, ownership races, active lock, loss prevention")
+
+local ownedSports=Mock.item("PlayableSoccer.SportsSoccerBall")
+player.inventory:AddItem(ownedSports)
+context.options={};PS_BallMenu.fill(0,context,{ownedSports})
+check(#context.options==3 and Mock.join,"sports menu includes practice, match and joining")
+check(context.options[2].label=="ContextMenu_PS_Start" and context.options[3].label=="ContextMenu_PS_CreateMatch","separate entry points")
+PS_BallMenu.createMatch(player,ownedSports)
+check(Mock.started==ownedSports and Mock.mode=="match","create enters placement workflow")
+PS_BallMenu.start(player,ownedSports)
+check(Mock.mode==nil,"free practice skips placement")

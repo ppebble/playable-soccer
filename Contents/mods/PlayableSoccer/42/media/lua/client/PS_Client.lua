@@ -5,6 +5,7 @@ require "PS_HUD"
 require "PS_Setup"
 require "PS_Motion"
 require "ISUI/ISPanel"
+require "ISUI/ISContextMenu"
 require "TimedActions/ISTimedActionQueue"
 PSClient={state={balls={}},revision=-1,samples={},lastSync=0}
 local C=PSClient
@@ -32,13 +33,15 @@ function C.releaseGuard()
     end
 end
 function C.leave()
-    C.selected=nil;C.charge=nil;C.pendingItem=nil;C.releaseGuard()
+    C.closeMenu();PSSetup.cancel()
+    C.selected=nil;C.charge=nil;C.pendingItem=nil;C.pendingMode=nil;C.releaseGuard()
     C.moveSample=nil;C.lastTouch=nil;C.lastDribbleRequest=nil
-    PSSetup.cancel()
 end
-function C.start(p,item)
+function C.start(p,item,mode)
     if p~=player() or not item or item:getFullType()~="PlayableSoccer.SportsSoccerBall" then return end
     if not PSRender.available() then C.notice("UI_PS_RenderError");return end
+    C.leave()
+    C.pendingMode=mode=='match' and 'match' or 'practice'
     C.pendingItem=item:getID();C.pendingAt=now();C.send("start",{itemId=item:getID()})
 end
 function C.stop(id)
@@ -59,9 +62,12 @@ function C.ball(id)
 end
 function C.receive(command,args)
     args=args or {}
-    if command=="notice" then C.pendingItem=nil;C.notice(args.key);return end
+    if command=="notice" then
+        C.pendingItem=nil;C.pendingMode=nil;C.notice(args.key)
+        PSSetup.receive(command,args);return
+    end
     if command~="state" or not PSCore.finite(args.revision) or args.revision<C.revision then return end
-    local samples={};local t=now()
+    local samples={};local t=now();local setupId
     for _,b in pairs(args.balls or {}) do
         if b.id and PSCore.finite(b.x) and PSCore.finite(b.y) and PSCore.finite(b.z) and PSCore.finite(b.h) then
             local prior=C.samples[b.id]
@@ -75,12 +81,15 @@ function C.receive(command,args)
                 PSMotion.play(player(),b.lob==true,b.kickDx,b.kickDy)
             end
             if C.pendingItem==b.itemId and player() and b.owner==owner(player()) then
-                C.selected=b.id;C.pendingItem=nil
+                if C.pendingMode=='match' then setupId=b.id else C.selected=b.id end
+                C.pendingItem=nil;C.pendingMode=nil
             end
         end
     end
     C.state=args;C.samples=samples;C.revision=args.revision;C.receivedAt=t
     if C.selected and not C.ball(C.selected) then C.leave() end
+    PSSetup.receive(command,args)
+    if setupId then PSSetup.begin(setupId) end
 end
 function C.positions()
     local out={};local t=now()
@@ -95,6 +104,7 @@ function C.positions()
     return out
 end
 function C.blocked()
+    if C.menu then return true end
     local p=player()
     if not p or p:isDead() or p:getVehicle() or (isGamePaused and isGamePaused()) or getCore():isDoingTextEntry() then return true end
     local q=ISTimedActionQueue.getTimedActionQueue(p)
@@ -163,16 +173,67 @@ function C.rightUp()
 end
 function C.keyPressed(key)
     if key~=Keyboard.KEY_ESCAPE then return end
-    if PSSetup.active() then PSSetup.cancel()
+    if C.menu then C.closeMenu()
+    elseif PSSetup.active() then PSSetup.cancel()
     elseif C.charge then C.charge=nil
-    elseif C.selected then C.leave() end
+    elseif C.selected then C.openMenu() end
+end
+function C.closeMenu()
+    local menu=C.menu;C.menu=nil
+    if menu then menu:hideAndChildren() end
+end
+function C.join(id,team)
+    local b=C.ball(id);local p=player()
+    if not b or not p or math.floor(p:getZ())~=b.z or (p:getX()-b.x)^2+(p:getY()-b.y)^2>64 then return end
+    C.leave();C.selected=id
+    if b.match and (team=='A' or team=='B') then C.send('team',{id=id,team=team}) end
+end
+function C.joinMenu(context)
+    local p=player();if not p then return end
+    for _,b in ipairs(C.state.balls) do
+        if math.floor(p:getZ())==b.z and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=64 then
+            local id=b.id
+            if b.match then
+                for _,team in ipairs({'A','B'}) do
+                    local choice=team
+                    local label=getText('UI_PS_JoinMatch')..' #'..tostring(id)..' ('..tostring(b.owner)..') · '..getText('UI_PS_Team'..team)
+                    context:addOption(label,nil,function() C.join(id,choice) end)
+                end
+            else
+                context:addOption(getText('UI_PS_JoinBall')..' #'..tostring(id),nil,function() C.join(id) end)
+            end
+        end
+    end
+end
+function C.openMenu()
+    local p=player();local b=C.ball(C.selected)
+    if not p or not b then return end
+    C.closeMenu();C.charge=nil;C.releaseGuard()
+    local menu=ISContextMenu.get(0,math.floor(getCore():getScreenWidth()/2),math.floor(getCore():getScreenHeight()/3))
+    C.menu=menu
+    menu:addOption(getText('UI_PS_SoccerMenu'),nil,nil).notAvailable=true
+    menu:addOption(getText('UI_PS_Resume'),nil,C.closeMenu)
+    if b.match then
+        for _,team in ipairs({'A','B'}) do
+            local choice=team
+            menu:addOption(getText('UI_PS_Team'..team),nil,function() C.closeMenu();C.send('team',{id=b.id,team=choice}) end)
+        end
+    end
+    if b.owner==owner(p) then
+        menu:addOption(getText('UI_PS_ResetBall'),nil,function() C.closeMenu();C.send('reset',{id=b.id}) end)
+        menu:addOption(getText('UI_PS_ConfigureGoals'),nil,function() C.closeMenu();PSSetup.begin(b.id) end)
+        menu:addOption(getText('UI_PS_StopBall'),b.id,C.stop)
+    end
+    menu:addOption(getText('UI_PS_LeaveBall'),nil,C.leave)
 end
 function C.update(p)
     if p~=player() then return end
+    if C.menu and not C.menu:isVisible() then C.menu=nil end
+    PSSetup.update()
     local t=now();local previous=C.moveSample
     C.moveSample={x=p:getX(),y=p:getY(),z=p:getZ(),at=t}
     if C.rightCaptured and not isMouseButtonDown(1) then C.rightUp() end
-    if C.pendingItem and now()-(C.pendingAt or 0)>5000 then C.pendingItem=nil;C.notice("UI_PS_StartFailed") end
+    if C.pendingItem and now()-(C.pendingAt or 0)>5000 then C.pendingItem=nil;C.pendingMode=nil;C.notice("UI_PS_StartFailed") end
     if C.inputActive() then C.guardInput(p)
     else C.charge=nil;C.releaseGuard() end
     if not C.ready() then C.charge=nil end
@@ -220,12 +281,7 @@ function C.context(index,context,objects,test)
     if index~=0 or test then return end
     local p=player();if not p then return end
     PSSetup.menu(index,context,C)
-    local nearest,distance=nil,64
-    for _,b in pairs(C.state.balls) do
-        local d=(p:getX()-b.x)^2+(p:getY()-b.y)^2
-        if math.floor(p:getZ())==b.z and d<distance then nearest=b;distance=d end
-    end
-    if nearest then context:addOption(getText("UI_PS_JoinBall"),nearest,function(b) C.leave();C.selected=b.id end) end
+    C.joinMenu(context)
     if C.selected then
         context:addOption(getText("UI_PS_LeaveBall"),nil,C.leave)
     end
@@ -245,7 +301,7 @@ function Overlay:onMouseWheel() return false end
 local function ownsEscape()
     local p=player()
     return p and not p:isDead() and not (isGamePaused and isGamePaused())
-        and not getCore():isDoingTextEntry() and (PSSetup.active() or C.selected~=nil or C.charge~=nil)
+        and not getCore():isDoingTextEntry() and (C.menu~=nil or PSSetup.active() or C.selected~=nil or C.charge~=nil)
 end
 function Overlay:onKeyPress(key)
     if key==Keyboard.KEY_ESCAPE then self.escapeConsumed=ownsEscape() and true or false end

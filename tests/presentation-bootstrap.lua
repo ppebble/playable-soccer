@@ -19,7 +19,7 @@ TEST.ball={id=1,owner="owner",x=5,y=5,z=0,h=0}
 PSClient={state={balls={TEST.ball}},selected=1}
 function PSClient.ball(id) if id==1 then return TEST.ball end end
 function PSClient.positions() return {TEST.ball} end
-function PSClient.leave() PSClient.selected=nil;PSSetup.cancel() end
+function PSClient.leave() PSSetup.cancel();PSClient.selected=nil end
 function PSClient.notice(key) PSClient.message=key;PSClient.messageUntil=TEST.time+5000 end
 function PSClient.blocked() return TEST.blocked end
 function PSClient.send(command,args) TEST.commands[#TEST.commands+1]={command=command,args=args} end

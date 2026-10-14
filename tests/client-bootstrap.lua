@@ -29,6 +29,18 @@ Keyboard={KEY_ESCAPE=1}
 ISObjectClickHandler={}
 PSProjection={available=function() return not TEST.noProjection end,screenToWorld=function(i,x,y,z) if TEST.noProjection then return end;return x,y end}
 PSSetup={active=function() return TEST.setup end,cancel=function() TEST.setup=nil end,click=function() TEST.setupClicked=true end,menu=function() end}
+PSSetup.begin=function(id) assert(PSClient.ball(id),'setup must see installed authoritative state');PSClient.leave();TEST.setup=id end
+PSSetup.receive=function(command,args) TEST.setupReceived=command end
+PSSetup.update=function() end
+ISContextMenu={get=function()
+    local menu={visible=true,options={}}
+    function menu:addOption(label,target,callback)
+        local option={label=label,target=target,callback=callback};self.options[#self.options+1]=option;return option
+    end
+    function menu:hideAndChildren() self.visible=false end
+    function menu:isVisible() return self.visible end
+    return menu
+end}
 PSHUD={render=function() TEST.hudRendered=true end}
 PSMotion={play=function(p,lob,dx,dy) TEST.motions=(TEST.motions or 0)+1;TEST.motionLob=lob end}
 PS_KickAction={}
