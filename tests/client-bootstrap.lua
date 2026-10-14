@@ -8,6 +8,7 @@ ISPanel={derive=function()
     function panel:initialise() end
     function panel:instantiate() self.instantiated=true;self.consume=self.wantMouse end
     function panel:setWantMouseEvents(v) self.wantMouse=v end
+    function panel:setWantKeyEvents(v) self.wantKey=v end
     function panel:setWidth(v) self.width=v end
     function panel:setHeight(v) self.height=v end
     function panel:addToUIManager() end

@@ -26,6 +26,7 @@ public final class InputNativeTest {
     static void checkInstalledLuaPanel(Path mod) throws Exception {
         // Verify the real Lua method surface, not a mock inventing Java wrappers.
         Class<?> nativeUI=Class.forName("zombie.ui.UIElement",false,InputNativeTest.class.getClassLoader());
+        for(String method:new String[]{"onConsumeKeyPress","onConsumeKeyRepeat","onConsumeKeyRelease","isKeyConsumed"}) nativeUI.getMethod(method,int.class);
         for(String method:new String[]{"setX","setY","setWidth","setHeight"}) nativeUI.getMethod(method,double.class);
         for(String method:new String[]{"setAnchorLeft","setAnchorRight","setAnchorTop","setAnchorBottom","setWantKeyEvents","setConsumeMouseEvents","setWantExtraMouseEvents","setForceCursorVisible"}) nativeUI.getMethod(method,boolean.class);
         Path bootstrap=Files.createTempFile("ps-ui-native-",".lua"), assertion=Files.createTempFile("ps-ui-assert-",".lua");
@@ -55,6 +56,32 @@ public final class InputNativeTest {
                 TEST.width=1600;TEST.height=900;PSClient.overlay:render()
                 assert(PSClient.overlay.width==1600 and PSClient.overlay.height==900)
                 assert(TEST.hudRendered)
+                local ui=PSClient.overlay
+                assert(ui.javaObject.setWantKeyEventsValue==true)
+                local esc=Keyboard.KEY_ESCAPE
+                PSClient.selected=1
+                ui:onKeyPress(esc);assert(ui:isKeyConsumed(esc))
+                ui:onKeyRelease(esc)
+                assert(PSClient.selected==nil and ui:isKeyConsumed(esc), 'Exit press must not open vanilla menu')
+                ui:onKeyPress(esc);ui:onKeyRelease(esc)
+                assert(not ui:isKeyConsumed(esc), 'Next Escape returns to vanilla menu')
+                PSClient.selected=1;PSClient.charge={}
+                ui:onKeyPress(esc);ui:onKeyRelease(esc)
+                assert(PSClient.charge==nil and PSClient.selected==1 and ui:isKeyConsumed(esc))
+                ui:onKeyPress(17);ui:onKeyRelease(17)
+                assert(not ui:isKeyConsumed(17) and PSClient.selected==1)
+                TEST.setup=true
+                ui:onKeyPress(esc);ui:onKeyRelease(esc)
+                assert(not TEST.setup and ui:isKeyConsumed(esc))
+                TEST.paused=true
+                ui:onKeyPress(esc);ui:onKeyRelease(esc)
+                assert(not ui:isKeyConsumed(esc) and PSClient.selected==1)
+                TEST.paused=false;TEST.typing=true
+                ui:onKeyPress(esc);ui:onKeyRelease(esc)
+                assert(not ui:isKeyConsumed(esc))
+                TEST.typing=false;TEST.dead=true
+                ui:onKeyPress(esc);ui:onKeyRelease(esc)
+                assert(not ui:isKeyConsumed(esc))
                 """);
             Path repo=mod.toAbsolutePath().getParent().getParent().getParent().getParent();
             LuaHarness.main(new String[]{repo.resolve("tests/client-bootstrap.lua").toString(),bootstrap.toString(),

@@ -218,6 +218,24 @@ function C.context(index,context,objects,test)
     end
 end
 local Overlay=ISPanel:derive("PSOverlay")
+local function ownsEscape()
+    local p=player()
+    return p and not p:isDead() and not (isGamePaused and isGamePaused())
+        and not getCore():isDoingTextEntry() and (PSSetup.active() or C.selected~=nil or C.charge~=nil)
+end
+function Overlay:onKeyPress(key)
+    if key==Keyboard.KEY_ESCAPE then self.escapeConsumed=ownsEscape() and true or false end
+end
+function Overlay:onKeyRelease(key)
+    if key~=Keyboard.KEY_ESCAPE then return end
+    -- Native UIElement queries isKeyConsumed AFTER this callback. Retain the
+    -- press latch even when leaving soccer clears selected/charge/setup.
+    self.escapeConsumed=self.escapeConsumed or (ownsEscape() and true or false)
+    if self.escapeConsumed then C.keyPressed(key) end
+end
+function Overlay:isKeyConsumed(key)
+    return key==Keyboard.KEY_ESCAPE and self.escapeConsumed==true
+end
 function Overlay:prerender() end -- HUD only; never draw ISPanel's fullscreen background.
 function Overlay:render()
     local core=getCore()
@@ -235,6 +253,7 @@ Events.OnGameStart.Add(function()
     C.overlay.background=false
     C.overlay:initialise()
     C.overlay:setWantMouseEvents(false)
+    C.overlay:setWantKeyEvents(true)
     C.overlay:instantiate()
     C.overlay:addToUIManager()
     C.send("sync",{})
@@ -243,7 +262,6 @@ Events.OnServerCommand.Add(function(module,command,args) if module=="PlayableSoc
 Events.OnMouseDown.Add(C.mouseDown)
 Events.OnRightMouseDown.Add(C.rightDown)
 Events.OnRightMouseUp.Add(C.rightUp)
-Events.OnKeyPressed.Add(C.keyPressed)
 Events.OnPlayerUpdate.Add(C.update)
 Events.OnFillWorldObjectContextMenu.Add(C.context)
 Events.OnPostRender.Add(function()
