@@ -170,7 +170,7 @@ function C.ready()
         and now()>=(C.tacklingUntil or 0)
         and (not b.possession or (b.possession.kind=='player' and b.possession.key==owner(p)))
         and (not b.match or b.match.phase=='play')
-        and PSRender.available() and PSProjection.available() and not PSSetup.active() and b.h<=.35 and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=PSCore.kickRange^2 and not C.blocked()
+        and PSRender.available() and PSProjection.available() and not PSSetup.active() and b.h<=.35 and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=(b.possession and PSCore.possessionKickRange or PSCore.kickRange)^2 and not C.blocked()
 end
 function C.inputActive(ignoreHover)
     local p=player();local b=C.ball(C.selected)

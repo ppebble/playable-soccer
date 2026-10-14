@@ -241,7 +241,9 @@ local function possessionTick(b,dt,t,all)
         if motion and motion.dx then dx=motion.dx;dy=motion.dy end
         if not C.finite(dx) or not C.finite(dy) or dx*dx+dy*dy<.001 then release(b,t);return true end
         local length=math.sqrt(dx*dx+dy*dy)
-        local tx,ty=holder:getX()+dx/length*.55,holder:getY()+dy/length*.55
+        -- Lead the holder enough to remain ahead through snapshot interpolation.
+        local lead=C.possessionLead(motion and motion.speed)
+        local tx,ty=holder:getX()+dx/length*lead,holder:getY()+dy/length*lead
         -- Near a wall, keep the ball at the feet instead of dropping possession
         -- just because the usual forward offset lies inside the obstacle.
         if not clearPath(b,holder:getX(),holder:getY(),tx,ty) or not clearPath(b,b.x,b.y,tx,ty) then
@@ -360,7 +362,8 @@ function S.command(p,command,args)
         if not b or p:getZ()~=b.z or (b.match and b.match.phase~='play') or (S.stunned[key] and t<S.stunned[key]) then return end
         if b.possession and (b.possession.kind~='player' or b.possession.key~=key) then return end
         if downed(p) or (b.possession and not participant(p,b,t)) then return end
-        if (p:getX()-b.x)^2+(p:getY()-b.y)^2>C.kickRange^2 or not clearPath(b,p:getX(),p:getY(),b.x,b.y) then return end
+        local range=b.possession and C.possessionKickRange or C.kickRange
+        if (p:getX()-b.x)^2+(p:getY()-b.y)^2>range^2 or not clearPath(b,p:getX(),p:getY(),b.x,b.y) then return end
         if not C.kick(b,args.dx,args.dy,args.power,args.lob) then return end
         b.possession=nil;b.captureAfter=t+.35;b.shooter=key;b.shooterAfter=t+.6
         local length=math.sqrt(args.dx^2+args.dy^2)

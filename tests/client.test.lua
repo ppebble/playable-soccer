@@ -215,3 +215,26 @@ TEST.time=TEST.time+801;TEST.noTackleMotion=true;attempts=#TEST.sent
 C.tackle();assert(#TEST.sent==attempts+1 and TEST.sent[#TEST.sent].command=='tackle','unavailable cosmetic gesture does not disable gameplay')
 TEST.noTackleMotion=false;C.leave()
 print('PASS local tackle gesture, cooldown, charge boundary and stable possession')
+
+TEST.time=TEST.time+2000;C.recoveryUntil=nil;C.tacklingUntil=nil
+TEST.queue={};TEST.down=false;TEST.onFloor=false;TEST.gettingUp=false;TEST.setup=nil;TEST.typing=false;TEST.paused=false;TEST.uis={};TEST.drag=nil
+C.closeMenu();C.receive('state',state(100));C.selected=1
+local leadBall=C.ball(1);leadBall.x=TEST.player:getX()+1.8;leadBall.y=TEST.player:getY()
+leadBall.possession={kind='player',key='test'}
+assert(C.ready(),'carried ball ahead remains chargeable')
+leadBall.possession=nil
+assert(not C.ready(),'forward loose ball retains original reach')
+
+-- With 100ms state interpolation, the speed-dependent lead remains ahead.
+for index,speed in ipairs({4,8,12}) do
+    C.samples={};TEST.time=TEST.time+1000
+    local first=state(100+index*2,10+PSCore.possessionLead(speed))
+    first.balls[1].possession={kind='player',key='test'}
+    C.receive('state',first)
+    TEST.time=TEST.time+100
+    local nextState=state(101+index*2,10+speed*.1+PSCore.possessionLead(speed))
+    nextState.balls[1].possession={kind='player',key='test'}
+    C.receive('state',nextState)
+    TEST.time=TEST.time+50
+    assert(C.positions()[1].x>10+speed*.15,'interpolated carried ball stays ahead of moving holder')
+end

@@ -45,11 +45,11 @@ print("PASS local native knockdown request and competing-state guards; animation
 TEST.error=nil;TEST.stopped=false;TEST.queue.queue={}
 PSClient={selected=7,blocked=function() return MOTION.menu end}
 MOTION={state='movement',localPlayer=true,running=true,moving=true}
-assert(PSMotion.tackleMilliseconds==500)
+assert(PSMotion.tackleMilliseconds==600)
 assert(PSMotion.tackle(motionPlayer,3,4))
 local tackle=TEST.queue.queue[1]
 assert(getmetatable(tackle).__index==PS_TackleAction)
-assert(tackle.ballId==7 and tackle.maxTime==15 and tackle:adjustMaxTime(15)==15)
+assert(tackle.ballId==7 and tackle.maxTime==18 and tackle:adjustMaxTime(18)==18)
 assert(not tackle.stopOnWalk and not tackle.stopOnRun and not tackle.stopOnAim)
 tackle.action=TEST.native;tackle:start()
 assert(TEST.anim=='PS_ShoulderTackle' and TEST.block==false and TEST.bar==false)

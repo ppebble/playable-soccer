@@ -143,3 +143,7 @@ print('PASS continuous airborne momentum through all descents and rebounds')
 assert(C.chargePower(225)==.5,'half charge takes225ms')
 assert(C.chargePower(405)==.9,'power shot threshold takes405ms')
 assert(C.chargePower(450)==1 and C.chargePower(900)==1,'full charge takes450ms and stays capped')
+
+assert(C.possessionLead(0)==.85)
+assert(math.abs(C.possessionLead(4)-1.33)<.000001)
+assert(math.abs(C.possessionLead(8)-1.8)<.000001 and math.abs(C.possessionLead(12)-1.8)<.000001)

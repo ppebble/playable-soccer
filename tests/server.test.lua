@@ -275,7 +275,7 @@ for _,speed in ipairs({4,8,12}) do
         S.command(p,'control',{id=2,active=true})
         p.x=p.x+speed/60;advance(1/60)
         assert(matchBall.possession and matchBall.possession.key==ownerKey,'sustained sprint retains holder')
-        if i>15 then assert(math.abs(matchBall.x-(p.x+.55))<.01,'ball stays at forward offset at sprint speed') end
+        if i>15 then assert(math.abs(matchBall.x-(p.x+PSCore.possessionLead(speed)))<.01,'ball stays at forward offset at sprint speed') end
     end
 end
 matchBall.match=originalMatch;beginFollowTest()
@@ -285,12 +285,12 @@ for batch=1,8 do
     assert(matchBall.possession,'400ms position batch must allow catch-up beyond old two-tile cutoff')
 end
 for i=1,24 do S.command(p,'control',{id=2,active=true});advance(1/60) end
-assert(math.abs(matchBall.x-p.x-.55)<.01,'batched updates converge to the feet')
+assert(math.abs(matchBall.x-p.x-.85)<.01,'batched updates converge to the feet')
 -- Turn sharply, stop, and tolerate a small same-time position correction.
 p.faceX=-1;p.x=p.x-.2;advance(1/60)
 assert(matchBall.possession,'sharp reversal retains ownership')
 for i=1,30 do S.command(p,'control',{id=2,active=true});advance(1/60) end
-assert(math.abs(matchBall.x-p.x+.55)<.01,'stopped ball settles ahead of new facing')
+assert(math.abs(matchBall.x-p.x+.85)<.01,'stopped ball settles ahead of new facing')
 p.x=p.x+.5;M.tick();assert(matchBall.possession,'same-timestamp correction is not an automatic release')
 -- Repeated lag cannot retain a ball indefinitely, and remote teleports still fail.
 for i=1,12 do
@@ -311,3 +311,14 @@ M.send(p,'kick',{id=2,dx=1,dy=0,power=2,lob=false})
 assert(matchBall.kickPower==.9,'rejected power cannot change animation metadata')
 M.send(p,'kick',{id=2,dx=1,dy=0,power=.2,lob=true})
 assert(matchBall.kickPower==.2,'light kick replaces previous strong power metadata')
+
+-- The forward carried ball remains kickable without expanding loose-ball reach.
+matchBall.match=originalMatch;beginFollowTest()
+matchBall.x=p.x+1.8;matchBall.y=p.y
+local leadSerial=matchBall.kickSerial or 0
+M.send(p,'kick',{id=2,dx=1,dy=0,power=.5})
+assert(not matchBall.possession and matchBall.kickSerial==leadSerial+1,'holder can shoot forward carried ball')
+matchBall.x=p.x+1.8;matchBall.y=p.y;matchBall.h=0
+leadSerial=matchBall.kickSerial
+M.send(p,'kick',{id=2,dx=1,dy=0,power=.5})
+assert(matchBall.kickSerial==leadSerial,'loose ball retains original kick reach')
