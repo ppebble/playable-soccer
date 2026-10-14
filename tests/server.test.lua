@@ -138,7 +138,7 @@ register(p);advance(.05)
 assert(matchBall.possession and matchBall.possession.key==ownerKey,'selected participant acquires resting ball')
 local x=matchBall.x
 p.x=p.x+.1;advance(.05)
-assert(matchBall.x>x and matchBall.x-x<=.60001,'holder follow is bounded, not teleporting')
+assert(matchBall.x>x and matchBall.x-x<=1.60001,'holder follow is bounded, not teleporting')
 local serial=matchBall.kickSerial
 M.send(other,'kick',{id=2,dx=1,dy=0,power=0})
 assert(matchBall.kickSerial==serial,'foreign player cannot shoot possessed ball')
@@ -158,7 +158,10 @@ assert(not matchBall.possession and matchBall.x<7,'holder teleport never drags b
 resetTest();register(p);advance(.01)
 M.wall=function(a,b) return a.x~=b.x end
 p.faceX=-1;S.motion={};advance(.1)
-assert(not matchBall.possession,'follow obstruction releases ball')
+assert(matchBall.possession and math.abs(matchBall.x-p.x)<.001,'blocked forward offset keeps ball at feet')
+p.x=4.8;matchBall.x=5.2;S.motion={};advance(.1)
+assert(matchBall.possession and matchBall.x==5.2,'brief wall obstruction cannot pull ball through')
+advance(.26);assert(not matchBall.possession and matchBall.x==5.2,'persistent separation by wall releases ball')
 resetTest();p.onFloor=true;register(p);advance(.1);assert(not matchBall.possession,'downed participant cannot acquire')
 p.onFloor=false;p.stateName='PlayerGetUpState';advance(.1);assert(not matchBall.possession,'get-up transition cannot acquire')
 p.stateName=nil;advance(.1);assert(matchBall.possession,'standing participant may acquire')
@@ -259,3 +262,44 @@ local prior=S.revision
 S.command(p,'control',{id=3,active=true})
 assert(S.revision==prior,'same-selection heartbeat does not broadcast redundant state')
 print('PASS control transitions, single-ball ownership, wall and airborne pickup boundaries')
+
+-- Sustained running and network-style batched movement must not drop possession.
+local function beginFollowTest()
+    resetTest();register(p);advance(.01)
+    matchBall.match=nil -- keep the running fixture out of goals and test zones
+end
+local originalMatch=matchBall.match
+for _,speed in ipairs({4,8,12}) do
+    matchBall.match=originalMatch;beginFollowTest()
+    for i=1,180 do
+        S.command(p,'control',{id=2,active=true})
+        p.x=p.x+speed/60;advance(1/60)
+        assert(matchBall.possession and matchBall.possession.key==ownerKey,'sustained sprint retains holder')
+        if i>15 then assert(math.abs(matchBall.x-(p.x+.55))<.01,'ball stays at forward offset at sprint speed') end
+    end
+end
+matchBall.match=originalMatch;beginFollowTest()
+for batch=1,8 do
+    for i=1,24 do S.command(p,'control',{id=2,active=true});advance(1/60) end
+    p.x=p.x+3.2;advance(1/60)
+    assert(matchBall.possession,'400ms position batch must allow catch-up beyond old two-tile cutoff')
+end
+for i=1,24 do S.command(p,'control',{id=2,active=true});advance(1/60) end
+assert(math.abs(matchBall.x-p.x-.55)<.01,'batched updates converge to the feet')
+-- Turn sharply, stop, and tolerate a small same-time position correction.
+p.faceX=-1;p.x=p.x-.2;advance(1/60)
+assert(matchBall.possession,'sharp reversal retains ownership')
+for i=1,30 do S.command(p,'control',{id=2,active=true});advance(1/60) end
+assert(math.abs(matchBall.x-p.x+.55)<.01,'stopped ball settles ahead of new facing')
+p.x=p.x+.5;M.tick();assert(matchBall.possession,'same-timestamp correction is not an automatic release')
+-- Repeated lag cannot retain a ball indefinitely, and remote teleports still fail.
+for i=1,12 do
+    S.command(p,'control',{id=2,active=true})
+    p.x=matchBall.x+3;p.faceX=1;advance(.1)
+end
+assert(not matchBall.possession,'persistent excessive lag eventually releases')
+matchBall.match=originalMatch;beginFollowTest()
+local beforeTeleport=matchBall.x;p.x=p.x+20;advance(.01)
+assert(not matchBall.possession and matchBall.x==beforeTeleport,'large teleport cannot drag the ball')
+matchBall.match=originalMatch
+print('PASS sustained sprint, batched updates, sharp turn, corrections, lag expiry and teleport boundaries')

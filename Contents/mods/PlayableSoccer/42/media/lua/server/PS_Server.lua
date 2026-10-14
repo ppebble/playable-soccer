@@ -97,14 +97,14 @@ local function sampleMotion(p,t)
         local elapsed=t-(previous.positionAt or previous.time)
         local dx,dy=current.x-previous.x,current.y-previous.y
         local length=math.sqrt(dx*dx+dy*dy)
-        if elapsed>0 and elapsed<=.75 and length>.0001 and length<=elapsed*12 then
+        if elapsed>0 and elapsed<=.75 and length>.0001 and length<=elapsed*12+.75 then
             current.dx=dx/length; current.dy=dy/length; current.speed=math.min(12,length/elapsed); current.movedAt=t
             if elapsed<=.15 and length<=1.2 then
                 current.fromX=previous.x; current.fromY=previous.y; current.fromAt=previous.positionAt or previous.time
             end
         elseif length<=.0001 and previous.movedAt and t>=previous.movedAt and t-previous.movedAt<=.3 then
             current.dx=previous.dx; current.dy=previous.dy; current.speed=previous.speed; current.movedAt=previous.movedAt
-        elseif length>.0001 and (elapsed<=0 or length>elapsed*12) then
+        elseif length>.0001 and (elapsed<=0 or length>elapsed*12+.75) then
             current.invalidMove=true
         end
         if length<=.0001 then
@@ -221,20 +221,41 @@ local function possessionTick(b,dt,t,all)
         if b.possession.kind=='zone' then return true end
         local holder
         for _,p in ipairs(all) do if owner(p)==b.possession.key then holder=p end end
-        if not holder or not participant(holder,b,t) or (holder:getX()-b.x)^2+(holder:getY()-b.y)^2>4 then release(b,t);return true end
+        if not holder or not participant(holder,b,t) then release(b,t);return true end
+        local separation=(holder:getX()-b.x)^2+(holder:getY()-b.y)^2
+        -- Remote movement arrives in batches. Allow a short catch-up interval,
+        -- but never pull a ball across a teleport or an indefinitely growing gap.
+        if separation>36 then release(b,t);return true end
+        local possession=b.possession
+        if separation>4 then
+            possession.lagSince=possession.lagSince or t
+            if t-possession.lagSince>.75 then release(b,t);return true end
+        else possession.lagSince=nil end
         local zone=b.match and b.match.testZones and b.match.testZones.tackle
         if zone and (holder:getX()-zone.x)^2+(holder:getY()-zone.y)^2<=zone.r^2
             and clearPath(b,holder:getX(),holder:getY(),zone.x,zone.y) then knockDown(holder,b,t);return true end
         local motion=S.motion[owner(holder)]
-        if motion and motion.invalidMove then release(b,t);return true end
+        -- A single speed-estimate spike is not a loss of control. Separation,
+        -- grace expiry and swept collision checks remain the hard boundaries.
         local dx,dy=holder:getForwardDirectionX(),holder:getForwardDirectionY()
         if motion and motion.dx then dx=motion.dx;dy=motion.dy end
         if not C.finite(dx) or not C.finite(dy) or dx*dx+dy*dy<.001 then release(b,t);return true end
         local length=math.sqrt(dx*dx+dy*dy)
         local tx,ty=holder:getX()+dx/length*.55,holder:getY()+dy/length*.55
-        if not clearPath(b,holder:getX(),holder:getY(),tx,ty) or not clearPath(b,b.x,b.y,tx,ty) then release(b,t);return true end
+        -- Near a wall, keep the ball at the feet instead of dropping possession
+        -- just because the usual forward offset lies inside the obstacle.
+        if not clearPath(b,holder:getX(),holder:getY(),tx,ty) or not clearPath(b,b.x,b.y,tx,ty) then
+            tx,ty=holder:getX(),holder:getY()
+            if not clearPath(b,b.x,b.y,tx,ty) then
+                possession.blockedSince=possession.blockedSince or t
+                if t-possession.blockedSince>.25 then release(b,t) end
+                return true
+            end
+        end
+        possession.blockedSince=nil
         local mx,my=tx-b.x,ty-b.y;local distance=math.sqrt(mx*mx+my*my)
-        local fraction=distance>0 and math.min(1,12*math.min(dt,.25)/distance) or 0
+        local speed=math.min(32,math.max(16,(motion and motion.speed or 0)+8,distance*10))
+        local fraction=distance>0 and math.min(1,speed*math.min(dt,.1)/distance) or 0
         local x,y=b.x,b.y;b.x=x+mx*fraction;b.y=y+my*fraction
         b.h=0;b.vx=0;b.vy=0;b.vz=0
         if PSMatch.segment(b,x,y,0,t) then release(b,t) end

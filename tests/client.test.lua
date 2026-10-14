@@ -179,3 +179,21 @@ assert(not ui:isKeyConsumed(space) and not TEST.banned,'Space outside soccer rem
 C.selected=1;TEST.typing=true;ui:onKeyPress(space)
 assert(not ui:isKeyConsumed(space) and not TEST.banned,'text entry Space remains untouched');TEST.typing=false;C.leave()
 print('PASS possession ownership, control heartbeat/cleanup, tackle latch and direct local fall deduplication')
+-- Mere UI hover never releases participation, while action inputs stay gated.
+TEST.time=50000;C.receive('state',state(50));C.selected=1;C.lastSync=TEST.time;C.update(TEST.player)
+assert(C.controlId==1)
+TEST.uis={{isVisible=function() return true end,isConsumeMouseEvents=function() return true end,isPointOver=function() return true end}}
+count=#TEST.sent;TEST.time=50100;C.update(TEST.player)
+assert(C.controlId==1 and #TEST.sent==count,'hover while running must not release server possession')
+C.mouseDown();C.rightDown();C.tackle()
+assert(not C.charge and #TEST.sent==count,'hover still blocks kick/lob/tackle intents')
+TEST.time=51000;C.update(TEST.player)
+assert(C.controlId==1 and TEST.sent[#TEST.sent].command=='control' and TEST.sent[#TEST.sent].args.active==true,'heartbeat survives hover')
+TEST.uis={};C.update(TEST.player);assert(C.controlId==1)
+C.openMenu();assert(not C.controlId and TEST.sent[#TEST.sent].args.active==false)
+C.closeMenu();C.update(TEST.player);assert(C.controlId==1)
+TEST.drag=true;C.update(TEST.player);assert(not C.controlId,'drag remains blocking');TEST.drag=nil
+C.update(TEST.player);TEST.queue={{}};C.update(TEST.player);assert(not C.controlId,'unrelated action remains blocking');TEST.queue={}
+C.update(TEST.player);C.ball(1).z=1;C.update(TEST.player);assert(not C.controlId,'floor changes release registration');C.ball(1).z=0
+C.update(TEST.player);C.leave();assert(not C.controlId and TEST.sent[#TEST.sent].args.active==false)
+print('PASS stable hover participation, gated actions and explicit release boundaries')

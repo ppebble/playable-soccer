@@ -140,7 +140,7 @@ function C.positions()
     end
     return out
 end
-function C.blocked()
+function C.blocked(ignoreHover)
     if C.menu then return true end
     local p=player()
     if not p or p:isDead() or p:getVehicle() or (isGamePaused and isGamePaused()) or getCore():isDoingTextEntry() then return true end
@@ -154,6 +154,7 @@ function C.blocked()
         end
     end
     if getCell():getDrag(0) then return true end
+    if ignoreHover then return false end
     local uis=UIManager.getUI()
     for i=0,uis:size()-1 do
         local ui=uis:get(i)
@@ -168,9 +169,10 @@ function C.ready()
         and (not b.match or b.match.phase=='play')
         and PSRender.available() and PSProjection.available() and not PSSetup.active() and b.h<=.35 and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=PSCore.kickRange^2 and not C.blocked()
 end
-function C.inputActive()
-    return C.selected and C.ball(C.selected) and C.receivedAt and now()-C.receivedAt<3000
-        and PSProjection.available() and PSRender.available() and not PSSetup.active() and not C.blocked()
+function C.inputActive(ignoreHover)
+    local p=player();local b=C.ball(C.selected)
+    return p and b and math.floor(p:getZ())==b.z and C.receivedAt and now()-C.receivedAt<3000
+        and PSProjection.available() and PSRender.available() and not PSSetup.active() and not C.blocked(ignoreHover)
 end
 function C.tackle()
     if not C.inputActive() or (C.lastTackle and now()-C.lastTackle<800) then return end
@@ -292,7 +294,9 @@ function C.update(p)
     if C.pendingItem and now()-(C.pendingAt or 0)>5000 then C.pendingItem=nil;C.pendingMode=nil;C.notice("UI_PS_StartFailed") end
     if C.inputActive() then C.guardInput(p)
     else C.charge=nil;C.releaseGuard() end
-    C.control(C.inputActive())
+    -- Hover blocks clicks, not participation: moving the cursor across an
+    -- inventory panel must not release the server-owned ball while running.
+    C.control(C.inputActive(true))
     if not C.ready() then C.charge=nil end
     if C.charge then
         if isMouseButtonDown(1-C.charge.button) then C.charge=nil
