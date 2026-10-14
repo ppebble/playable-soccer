@@ -33,6 +33,7 @@ function C.releaseGuard()
 end
 function C.leave()
     C.selected=nil;C.charge=nil;C.pendingItem=nil;C.releaseGuard()
+    C.moveSample=nil;C.lastTouch=nil
     PSSetup.cancel()
 end
 function C.start(p,item)
@@ -65,7 +66,7 @@ function C.receive(command,args)
         if b.id and PSCore.finite(b.x) and PSCore.finite(b.y) and PSCore.finite(b.z) and PSCore.finite(b.h) then
             local prior=C.samples[b.id]
             samples[b.id]={a=prior and prior.b or b,b=b,at=t,duration=prior and math.min(250,math.max(1,t-prior.at)) or 1}
-            if prior and b.kickSerial and b.kickSerial~=(prior.b.kickSerial or 0) and player() and b.kicker==owner(player()) then
+            if prior and not b.dribble and b.kickSerial and b.kickSerial~=(prior.b.kickSerial or 0) and player() and b.kicker==owner(player()) then
                 PSMotion.play(player(),b.lob==true,b.kickDx,b.kickDy)
             end
             if C.pendingItem==b.itemId and player() and b.owner==owner(player()) then
@@ -81,7 +82,9 @@ function C.positions()
     for id,s in pairs(C.samples) do
         local a,b=s.a,s.b
         local f=math.min(1,math.max(0,(t-s.at)/s.duration))
-        if a.z~=b.z or (a.x-b.x)^2+(a.y-b.y)^2>16 then f=1 end
+        local phaseA=a.match and a.match.phase
+        local phaseB=b.match and b.match.phase
+        if phaseB=='goal' or phaseA~=phaseB or a.z~=b.z or (a.x-b.x)^2+(a.y-b.y)^2>16 then f=1 end
         out[#out+1]={id=id,x=a.x+(b.x-a.x)*f,y=a.y+(b.y-a.y)*f,z=b.z,h=a.h+(b.h-a.h)*f}
     end
     return out
@@ -108,6 +111,7 @@ end
 function C.ready()
     local p=player();local b=C.ball(C.selected)
     return p and b and C.receivedAt and now()-C.receivedAt<3000 and math.floor(p:getZ())==b.z
+        and (not b.match or b.match.phase=='play')
         and PSRender.available() and PSProjection.available() and not PSSetup.active() and b.h<=.35 and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=PSCore.kickRange^2 and not C.blocked()
 end
 function C.inputActive()
@@ -160,6 +164,8 @@ function C.keyPressed(key)
 end
 function C.update(p)
     if p~=player() then return end
+    local t=now();local previous=C.moveSample
+    C.moveSample={x=p:getX(),y=p:getY(),z=p:getZ(),at=t}
     if C.rightCaptured and not isMouseButtonDown(1) then C.rightUp() end
     if C.pendingItem and now()-(C.pendingAt or 0)>5000 then C.pendingItem=nil;C.notice("UI_PS_StartFailed") end
     if C.inputActive() then C.guardInput(p)
@@ -173,9 +179,23 @@ function C.update(p)
             if b then
                 local x,y=PSProjection.screenToWorld(0,getMouseX(),getMouseY(),b.z)
                 if PSCore.finite(x) and PSCore.finite(y) then
+                    C.lastTouch=t
                     C.send("kick",{id=b.id,dx=x-b.x,dy=y-b.y,lob=charge.lob,power=math.min(1,math.max(0,(now()-charge.at)/900))})
                 end
             end
+        end
+    end
+    if previous and previous.z==p:getZ() and t-previous.at<=250 and C.ready()
+        and not C.charge and not isMouseButtonDown(0) and not isMouseButtonDown(1)
+        and p:isPlayerMoving() and (p:isRunning() or p:isSprinting())
+        and (not C.lastTouch or t-C.lastTouch>=400) then
+        local b=C.ball(C.selected)
+        local dx,dy=p:getX()-previous.x,p:getY()-previous.y
+        local distance=dx*dx+dy*dy
+        if b.h==0 and b.vz==0 and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=(PSCore.dribbleRange or .8)^2
+            and distance>0.000001 and distance<1 then
+            local length=math.sqrt(distance);C.lastTouch=t
+            C.send("dribble",{id=b.id,dx=dx/length,dy=dy/length})
         end
     end
     if now()-C.lastSync>2000 then C.lastSync=now();C.send("sync",{}) end
@@ -200,6 +220,9 @@ end
 local Overlay=ISPanel:derive("PSOverlay")
 function Overlay:prerender() end -- HUD only; never draw ISPanel's fullscreen background.
 function Overlay:render()
+    local core=getCore()
+    if self.width~=core:getScreenWidth() then self:setWidth(core:getScreenWidth()) end
+    if self.height~=core:getScreenHeight() then self:setHeight(core:getScreenHeight()) end
     PSHUD.render(self,C)
 end
 function C.reset()
@@ -208,9 +231,12 @@ function C.reset()
 end
 Events.OnGameStart.Add(function()
     C.reset()
-    C.overlay=Overlay:new(0,0,0,0)
+    C.overlay=Overlay:new(0,0,getCore():getScreenWidth(),getCore():getScreenHeight())
     C.overlay.background=false
-    C.overlay:initialise();C.overlay:instantiate();C.overlay:setWantMouseEvents(false);C.overlay:setConsumeMouseEvents(false);C.overlay:addToUIManager()
+    C.overlay:initialise()
+    C.overlay:setWantMouseEvents(false)
+    C.overlay:instantiate()
+    C.overlay:addToUIManager()
     C.send("sync",{})
 end)
 Events.OnServerCommand.Add(function(module,command,args) if module=="PlayableSoccer" then C.receive(command,args) end end)

@@ -61,6 +61,9 @@ Events.OnGameStart.callback()
 assert(C.overlay.background==false and C.overlay.consume==false)
 assert(C.overlay.instantiated and C.overlay.wantMouse==false)
 C.overlay:render();assert(TEST.hudRendered)
+assert(C.overlay.width==1280 and C.overlay.height==720)
+TEST.width=1600;TEST.height=900;C.overlay:render()
+assert(C.overlay.width==1600 and C.overlay.height==900)
 C.overlay:prerender() -- No draw methods provided: a background draw would fail.
 TEST.no3D=true
 C.start(TEST.player,item);assert(not C.pendingItem and C.message=="UI_PS_RenderError")
@@ -84,4 +87,27 @@ C.keyPressed(Keyboard.KEY_ESCAPE);assert(not TEST.setup)
 local accepted=state(9);accepted.balls[1].kickSerial=1;accepted.balls[1].kicker="test";accepted.balls[1].kickDx=1;accepted.balls[1].kickDy=0;accepted.balls[1].lob=true
 C.receive("state",accepted);assert(TEST.motions==1 and TEST.motionLob)
 C.receive("state",accepted);assert(TEST.motions==1)
+-- Running contact is world movement, independent of cursor, and rate bounded.
+C.leave();C.selected=1;TEST.running=true;TEST.moving=true;TEST.time=10000
+C.receive("state",state(10));C.update(TEST.player)
+TEST.time=10020;TEST.x=1.1;C.update(TEST.player)
+assert(TEST.sent[#TEST.sent].command=="dribble" and TEST.sent[#TEST.sent].args.dx==1 and TEST.sent[#TEST.sent].args.dy==0)
+local sent=#TEST.sent
+TEST.time=10040;TEST.x=1.2;C.update(TEST.player);assert(#TEST.sent==sent)
+TEST.time=10420;TEST.x=1.3;C.update(TEST.player);assert(#TEST.sent==sent) -- stale delta
+TEST.time=10440;TEST.x=1.4;C.update(TEST.player);assert(#TEST.sent==sent+1)
+sent=#TEST.sent;C.lastTouch=nil;TEST.running=false
+TEST.time=10460;TEST.x=1.5;C.update(TEST.player);assert(#TEST.sent==sent) -- walking
+TEST.running=true;C.ball(1).h=.01;TEST.time=10480;TEST.x=1.6;C.update(TEST.player);assert(#TEST.sent==sent)
+C.ball(1).h=0;TEST.buttons[0]=true;TEST.time=10500;TEST.x=1.7;C.update(TEST.player);assert(#TEST.sent==sent)
+TEST.buttons[0]=false;TEST.time=10520;TEST.x=1.9;C.update(TEST.player);assert(#TEST.sent==sent) -- no contact
+TEST.x=1.1;TEST.running=false;TEST.sprinting=true;C.moveSample=nil;C.update(TEST.player)
+TEST.time=10540;TEST.y=1.1;C.update(TEST.player)
+assert(TEST.sent[#TEST.sent].command=="dribble" and TEST.sent[#TEST.sent].args.dx==0 and TEST.sent[#TEST.sent].args.dy==1)
+local contact=state(11);contact.balls[1].kickSerial=2;contact.balls[1].kicker='test';contact.balls[1].dribble=true
+C.receive('state',contact);assert(TEST.motions==1)
+local goal=state(12,2);goal.balls[1].match={phase='goal'};TEST.time=10700
+C.receive('state',goal);assert(C.positions()[1].x==2 and not C.ready())
+local restart=state(13,1);restart.balls[1].match={phase='play'};TEST.time=10750
+C.receive('state',restart);assert(C.positions()[1].x==1)
 print("PASS client charge, cancellation, UI gates, interpolation and detached proxy")

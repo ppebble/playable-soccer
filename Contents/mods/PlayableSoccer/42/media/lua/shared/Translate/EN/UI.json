@@ -12,16 +12,16 @@
   "UI_PS_Ground": "GROUND KICK",
   "UI_PS_Lob": "LOB",
   "UI_PS_CameraUnsupported": "This camera needs a soccer adapter. Viewpoint support is planned, not enabled yet.",
-  "UI_PS_ConfigureGoals": "Soccer: set two goals and center",
+  "UI_PS_ConfigureGoals": "Soccer: draw two goal lines",
   "UI_PS_ResetBall": "Soccer: return ball to center",
   "UI_PS_TeamA": "Soccer: join team A",
   "UI_PS_TeamB": "Soccer: join team B",
-  "UI_PS_Place1": "Goal A: click the first post. Esc cancels.",
-  "UI_PS_Place2": "Goal A: click the second post (2-10 tiles wide).",
-  "UI_PS_Place3": "Goal B: click the first post on the opposite side.",
-  "UI_PS_Place4": "Goal B: click the second post (2-10 tiles wide).",
-  "UI_PS_Place5": "Click the kickoff position between the goals.",
+  "UI_PS_Place1": "Goal 1: click the start of the line. Right-click/Esc cancels.",
+  "UI_PS_Place2": "Goal 1: click the end of the line (2–10 tiles).",
+  "UI_PS_Place3": "Goal 2: click the start of the opposite goal line.",
+  "UI_PS_Place4": "Goal 2: click the end to finish. Restart is midway between the goals.",
   "UI_PS_GoalsInvalid": "Invalid goals: clear ground, width 2-10 tiles, opposing mouths, center at least 2 tiles inside each; stand within 40 tiles of every point.",
   "UI_PS_GoalsReady": "Goals set. Choose a team from the soccer menu after leaving controls with Esc.",
-  "UI_PS_BallReset": "Ball returned to the center."
+  "UI_PS_BallReset": "Ball returned to the center.",
+  "UI_PS_LineInvalid": "Goal lines must be 2–10 tiles long. Choose the endpoint again."
 }

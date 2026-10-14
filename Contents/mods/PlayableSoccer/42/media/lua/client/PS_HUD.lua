@@ -58,13 +58,44 @@ function H.render(panel,C)
         for i,pt in ipairs(pending.points) do marker(panel,pt.x,pt.y,pending.z,tostring(i),1,.8,.2) end
         local x,y=PSProjection.screenToWorld(0,getMouseX(),getMouseY(),pending.z)
         if x then marker(panel,x,y,pending.z,"+",1,.8,.2) end
+        for i=1,#pending.points,2 do
+            local a=pending.points[i]
+            local b=pending.points[i+1] or (x and {x=x,y=y})
+            if b then
+                local valid=PSSetup.validLine(a,b)
+                line(panel,{ax=a.x,ay=a.y,bx=b.x,by=b.y},pending.z,valid and .25 or 1,valid and 1 or .2)
+                local sx,sy=project((a.x+b.x)/2,(a.y+b.y)/2,pending.z)
+                if sx then
+                    local length=math.sqrt((b.x-a.x)^2+(b.y-a.y)^2)
+                    panel:drawTextCentre(string.format("%.1f / 2–10",length),sx,sy-20,1,1,1,1,UIFont.Small)
+                end
+            end
+        end
     end
     for _,b in ipairs(C.positions()) do
         if b.z==math.floor(p:getZ()) then
             local square=getCell():getGridSquare(math.floor(b.x),math.floor(b.y),b.z)
             if square and square:isCanSee(0) then
                 local sx,sy=project(b.x,b.y,b.z)
-                if sx then panel:drawRect(sx-5,sy-2,10,4,.45,0,0,0) end
+                if sx then
+                    -- Project a tile-space footprint so the shadow follows zoom,
+                    -- but never lift it with the airborne display item.
+                    local ex=project(b.x+.25,b.y-.25,b.z)
+                    local radius=math.max(4,math.min(24,ex and math.abs(ex-sx) or 8))
+                    local height=math.max(0,b.h or 0)
+                    radius=radius/(1+height*.2)
+                    local alpha=math.max(.3,.7-height*.15)
+                    for row=-2,2 do
+                        local half=radius*math.sqrt(1-(row/3)^2)
+                        panel:drawRect(sx-half,sy+row*radius/6,half*2,math.max(1,radius/6),alpha,0,0,0)
+                    end
+                    if selected and selected.id==b.id and height>.12 then
+                        local _,airY=project(b.x,b.y,b.z+height)
+                        if airY then
+                            for y=airY+8,sy-6,6 do panel:drawRect(sx-1,y,2,2,.5,1,.9,.55) end
+                        end
+                    end
+                end
             end
         end
     end

@@ -41,6 +41,11 @@ function M.player(name,x,y,id)
     function p:getZ() return self.z end
     function p:isDead() return self.dead end
     function p:getVehicle() return self.vehicle end
+    function p:isRunning() return self.running or false end
+    function p:isSprinting() return self.sprinting or false end
+    function p:isPlayerMoving() return self.moving or false end
+    function p:getForwardDirectionX() return self.faceX or 1 end
+    function p:getForwardDirectionY() return self.faceY or 0 end
     function p:getInventory() return {getItems=function() return list(self.items) end} end
     M.players[#M.players+1]=p
     return p

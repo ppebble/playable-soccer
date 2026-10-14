@@ -4,18 +4,22 @@ Events={OnGameStart=event(),OnServerCommand=event(),OnMouseDown=event(),OnPlayer
 Events.OnRightMouseDown=event();Events.OnRightMouseUp=event();Events.OnKeyPressed=event()
 ISPanel={derive=function()
     local panel={}
-    function panel:new() return setmetatable({},{__index=self}) end
+    function panel:new(x,y,w,h) return setmetatable({width=w,height=h},{__index=self}) end
     function panel:initialise() end
-    function panel:instantiate() self.instantiated=true end
+    function panel:instantiate() self.instantiated=true;self.consume=self.wantMouse end
     function panel:setWantMouseEvents(v) self.wantMouse=v end
-    function panel:setConsumeMouseEvents(v) self.consume=v end
+    function panel:setWidth(v) self.width=v end
+    function panel:setHeight(v) self.height=v end
     function panel:addToUIManager() end
     function panel:removeFromUIManager() end
     return panel
 end}
 TEST={time=1000,buttons={},sent={},uis={},registered=0,renders=0}
 function getTimestampMs() return TEST.time end
-TEST.player={getX=function() return 1 end,getY=function() return 1 end,getZ=function() return 0 end,getUsername=function() return "test" end,isDead=function() return TEST.dead end,getVehicle=function() return nil end,isBannedAttacking=function() return TEST.banned or false end,setBannedAttacking=function(self,b) TEST.banned=b end}
+TEST.player={getX=function() return TEST.x or 1 end,getY=function() return TEST.y or 1 end,getZ=function() return 0 end,getUsername=function() return "test" end,isDead=function() return TEST.dead end,getVehicle=function() return nil end,isBannedAttacking=function() return TEST.banned or false end,setBannedAttacking=function(self,b) TEST.banned=b end}
+TEST.player.isPlayerMoving=function() return TEST.moving end
+TEST.player.isRunning=function() return TEST.running end
+TEST.player.isSprinting=function() return TEST.sprinting end
 TEST.player.isForceAim=function() return TEST.forceAim or false end
 TEST.player.setForceAim=function(self,v) TEST.forceAim=v end
 TEST.player.nullifyAiming=function() TEST.forceAim=false;TEST.aiming=false end
@@ -38,13 +42,13 @@ function getMouseX() return 8 end
 function getMouseY() return 1 end
 function screenToIsoX(i,x,y,z) return x end
 function screenToIsoY(i,x,y,z) return y end
-function getCore() return {isOption3DGroundItem=function() return not TEST.no3D end,isDoingTextEntry=function() return TEST.typing end,getScreenWidth=function() return 1280 end,getScreenHeight=function() return 720 end} end
+function getCore() return {isOption3DGroundItem=function() return not TEST.no3D end,isDoingTextEntry=function() return TEST.typing end,getScreenWidth=function() return TEST.width or 1280 end,getScreenHeight=function() return TEST.height or 720 end} end
 ISTimedActionQueue={getTimedActionQueue=function() return {queue=TEST.queue or {}} end}
 UIManager={getUI=function() return {size=function() return #TEST.uis end,get=function(self,i) return TEST.uis[i+1] end} end}
 UIManager.setRightDownObject=function(v) TEST.rightObject=v end
 TEST.square={isCanSee=function() return true end}
 function getCell() return {getDrag=function() return TEST.drag end,getGridSquare=function() return TEST.square end} end
-function instanceItem(t) return {type=t} end
+function instanceItem(t) return {type=t,setWorldXRotation=function() end,setWorldYRotation=function() end,setWorldZRotation=function() end} end
 ColorInfo={new=function() return {} end}
 IsoSprite={new=function() return {empty=true} end}
 IsoWorldInventoryObject={new=function(item,square,x,y,z)

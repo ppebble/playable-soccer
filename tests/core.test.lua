@@ -47,12 +47,27 @@ assert(paused.x<=4,'wall clock stalls must not advance an hour of travel')
 print('PASS soccer core persistent physics')
 local lob=assert(C.newBall(0,0,0))
 assert(not C.kick(lob,1,0,1,'yes'),'lob must be boolean')
-assert(C.kick(lob,1,0,1,true) and lob.vz==8/C.tilesPerFloor)
+assert(C.kick(lob,1,0,1,true) and lob.vz==C.maxSpeed*.5/C.tilesPerFloor)
 local peak=0
 for i=1,2000 do C.step(lob,.01); peak=math.max(peak,lob.h) end
-assert(peak>1 and peak<1.1 and lob.x>15,'maximum lob apex is about 1.09 world floors')
-assert(peak*C.tilesPerFloor>3 and peak*C.tilesPerFloor<3.3,'vertical floor units preserve the physical launch angle')
+assert(peak>.45 and peak<.48 and lob.x>16 and lob.x<20,'maximum lob lands within a street pitch and stays below half a floor')
+assert(peak*C.tilesPerFloor>1.35 and peak*C.tilesPerFloor<1.44,'vertical floor units preserve the physical launch angle')
 assert(lob.h==0 and lob.vz==0 and lob.vx==0,'lob lands and eventually rests')
 local short=assert(C.newBall(0,0,0)); C.kick(short,1,0,.1,true)
 for i=1,2000 do C.step(short,.01) end
 assert(short.x<lob.x and short.h==0,'charge controls lob distance')
+for _,dt in ipairs({.01,.05,.25}) do
+    for _,loft in ipairs({false,true}) do
+        for _,power in ipairs({0,.5,1}) do
+            local shot=C.newBall(0,0,0); C.kick(shot,1,0,power,loft)
+            for i=1,math.ceil(20/dt) do C.step(shot,dt) end
+            assert(shot.vx==0 and shot.vy==0 and shot.h==0,'every normal shot settles')
+            assert(shot.x<=20,'full charge must not cross an entire neighborhood')
+            if power==0 then assert(shot.x>=1 and shot.x<=2,'weak click travels one to two tiles') end
+            if power==1 then assert(shot.x>=16,'strong kick retains useful street-pitch range') end
+        end
+    end
+end
+local frozen=C.newBall(5,0,0); frozen.h=.2; frozen.vx=10; frozen.vz=1; frozen.match={phase='goal'}
+C.step(frozen,.25)
+assert(frozen.x==5 and frozen.h==.2 and frozen.vx==0 and frozen.vz==0,'goal pause freezes client extrapolation including gravity')

@@ -25,6 +25,7 @@ try {
     Invoke-Lua @((Join-Path $repo 'tests/server-bootstrap.lua'),$core,$match,(Join-Path $mod 'media/lua/server/PS_Server.lua'),(Join-Path $repo 'tests/server.test.lua'))
     Invoke-Lua @((Join-Path $repo 'tests/conversion-bootstrap.lua'),(Join-Path $mod 'media/lua/shared/PS_ConvertBall.lua'),(Join-Path $mod 'media/lua/client/PS_BallMenu.lua'),(Join-Path $repo 'tests/conversion.test.lua'))
     Invoke-Lua @((Join-Path $repo 'tests/client-bootstrap.lua'),$core,(Join-Path $mod 'media/lua/client/PS_Render.lua'),(Join-Path $mod 'media/lua/client/PS_Client.lua'),(Join-Path $repo 'tests/client.test.lua'))
+    Invoke-Lua @((Join-Path $repo 'tests/client-bootstrap.lua'),$core,(Join-Path $mod 'media/lua/client/PS_Render.lua'),(Join-Path $repo 'tests/render.test.lua'))
     Invoke-Lua @((Join-Path $repo 'tests/presentation-bootstrap.lua'),$core,(Join-Path $mod 'media/lua/client/PS_Projection.lua'),(Join-Path $mod 'media/lua/client/PS_Setup.lua'),(Join-Path $mod 'media/lua/client/PS_HUD.lua'),(Join-Path $repo 'tests/presentation.test.lua'))
     Invoke-Lua @((Join-Path $repo 'tests/motion-bootstrap.lua'),(Join-Path $mod 'media/lua/client/PS_Motion.lua'),(Join-Path $repo 'tests/motion.test.lua'))
     foreach($name in @('NativeApiTest','RenderNativeTest','InputNativeTest','MotionNativeTest')) {

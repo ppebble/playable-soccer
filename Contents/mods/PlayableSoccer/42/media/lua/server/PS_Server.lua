@@ -1,7 +1,7 @@
 if isClient() then return end
 require 'PS_Core'
 require 'PS_Match'
-PSServer = {balls={},rates={},revision=0,serial=0}
+PSServer = {balls={},rates={},motion={},revision=0,serial=0}
 local S,C=PSServer,PSCore
 local module='PlayableSoccer'
 local function now() return getTimestampMs()/1000 end
@@ -88,7 +88,39 @@ end
 local function mobile(p)
     return not p:isDead() and not p:getVehicle() and C.finite(p:getX()) and C.finite(p:getY()) and integer(p:getZ())
 end
-local cooldown={start=.5,kick=.15,stop=.15,sync=.25,configure=.5,reset=.5,team=.5}
+local cooldown={start=.5,kick=.15,dribble=.4,stop=.15,sync=.25,configure=.5,reset=.5,team=.5}
+local function sampleMotion(p,t)
+    local key=owner(p)
+    local previous=S.motion[key]
+    local current={x=p:getX(),y=p:getY(),z=p:getZ(),time=t}
+    if previous and previous.z==current.z then
+        local elapsed=t-previous.time
+        local dx,dy=current.x-previous.x,current.y-previous.y
+        local length=math.sqrt(dx*dx+dy*dy)
+        if elapsed>0 and elapsed<=.75 and length>.0001 and length<=elapsed*12 then
+            current.dx=dx/length; current.dy=dy/length; current.movedAt=t
+        elseif previous.movedAt and t-previous.movedAt<=.3 then
+            current.dx=previous.dx; current.dy=previous.dy; current.movedAt=previous.movedAt
+        end
+    end
+    S.motion[key]=current
+    return current
+end
+local function dribbleDirection(p,args,t)
+    if not (p:isRunning() or p:isSprinting()) or not p:isPlayerMoving() then return nil end
+    if not C.finite(args.dx) or not C.finite(args.dy) or math.abs(args.dx)>1 or math.abs(args.dy)>1 then return nil end
+    local length=math.sqrt(args.dx*args.dx+args.dy*args.dy)
+    if length<.0001 then return nil end
+    local dx,dy=args.dx/length,args.dy/length
+    local motion=sampleMotion(p,t)
+    local sx,sy=motion.dx,motion.dy
+    if not sx then sx=p:getForwardDirectionX(); sy=p:getForwardDirectionY() end
+    if not C.finite(sx) or not C.finite(sy) then return nil end
+    local sl=math.sqrt(sx*sx+sy*sy)
+    if sl<.0001 or (dx*sx+dy*sy)/sl<.5 then return nil end
+    -- Server direction wins; input is only an intent compatible with it.
+    return sx/sl,sy/sl
+end
 local function clearPoint(x,y,z)
     local sq=square(x,y,z)
     return supported(sq) and not solid(sq)
@@ -163,16 +195,25 @@ function S.command(p,command,args)
         local count=0; for _ in pairs(b.match.teams) do count=count+1 end
         if count>=64 and not b.match.teams[key] then return end
         b.match.teams[key]=args.team
-    elseif command=='kick' then
+    elseif command=='kick' or command=='dribble' then
         local b=integer(args.id) and S.balls[args.id]
         if not b or p:getZ()~=b.z or (b.match and b.match.phase~='play') then return end
         local dx,dy=p:getX()-b.x,p:getY()-b.y
-        if dx*dx+dy*dy>C.kickRange*C.kickRange then return end
+        local range=command=='dribble' and C.dribbleRange or C.kickRange
+        if dx*dx+dy*dy>range*range then return end
+        local kx,ky,power,lob=args.dx,args.dy,args.power,args.lob
+        if command=='dribble' then
+            if b.h~=0 or b.vz~=0 or (rates.kick and t-rates.kick<.4) then return end
+            kx,ky=dribbleDirection(p,args,t)
+            if not kx then return end
+            power=C.dribblePower; lob=false
+        end
         local bx,by,halt=S.collision(b,p:getX(),p:getY(),b.x,b.y)
-        if bx or by or halt or not C.kick(b,args.dx,args.dy,args.power,args.lob) then return end
-        local length=math.sqrt(args.dx*args.dx+args.dy*args.dy)
+        if bx or by or halt or not C.kick(b,kx,ky,power,lob) then return end
+        local length=math.sqrt(kx*kx+ky*ky)
         b.kickSerial=(b.kickSerial or 0)+1; b.kicker=key
-        b.kickDx=args.dx/length; b.kickDy=args.dy/length; b.lob=args.lob==true
+        b.kickDx=kx/length; b.kickDy=ky/length; b.lob=lob==true
+        b.dribble=command=='dribble'
     end
     publishAll()
 end
@@ -183,14 +224,23 @@ function S.tick()
     local hasBall=false
     for _ in pairs(S.balls) do hasBall=true; break end
     if not hasBall then return end
+    local live={}
+    for _,p in ipairs(players()) do
+        if mobile(p) then sampleMotion(p,t); live[owner(p)]=true end
+    end
+    for key in pairs(S.motion) do if not live[key] then S.motion[key]=nil end end
+    local scored=false
     for _,b in pairs(S.balls) do
         if b.match and b.match.phase=='goal' then
             if t>=b.match.resetAt and clearPoint(b.match.center.x,b.match.center.y,b.z) then PSMatch.reset(b) end
         else
-            C.step(b,dt,S.collision,function(ball,x,y,h) return PSMatch.segment(ball,x,y,h,t) end)
+            C.step(b,dt,S.collision,function(ball,x,y,h)
+                if PSMatch.segment(ball,x,y,h,t) then scored=true; return true end
+                return false
+            end)
         end
     end
-    if not S.lastPublish or t-S.lastPublish>=.1 then S.lastPublish=t; publishAll() end
+    if scored or not S.lastPublish or t-S.lastPublish>=.1 then S.lastPublish=t; publishAll() end
 end
 Events.OnClientCommand.Add(function(mod,command,p,args) if mod==module then S.command(p,command,args) end end)
 Events.OnTick.Add(S.tick)

@@ -11,6 +11,10 @@ public final class RenderNativeTest {
         Class<?> sprite=Class.forName("zombie.iso.sprite.IsoSprite",false,RenderNativeTest.class.getClassLoader());
         sprite.getConstructor();proxy.getMethod("setSprite",sprite);
         for(String method:new String[]{"setOffX","setOffY","setOffZ"}) proxy.getMethod(method,float.class);
+        for(String axis:new String[]{"X","Y","Z"}) {
+            item.getMethod("setWorld"+axis+"Rotation",float.class);
+            item.getMethod("getWorld"+axis+"Rotation");
+        }
         proxy.getMethod("setAlphaAndTarget",int.class,float.class);
         proxy.getMethod("render",float.class,float.class,float.class,color,boolean.class,boolean.class,shader);
         square.getMethod("isCanSee",int.class);

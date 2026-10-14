@@ -12,13 +12,18 @@ check(P.screenToWorld(0,1,1,0)==nil and P.worldToScreen(0,1,1,0)==nil,"invalid c
 P.register(nil)
 PSSetup.begin(1);check(not PSSetup.active(),"no placement under unsupported camera")
 Viewpoint=nil
-PSSetup.begin(1);check(PSSetup.active(),"start five-point placement")
+PSSetup.begin(1);check(PSSetup.active(),"start two goal-line placement")
 TEST.blocked=true;PSSetup.click(0);check(#PSSetup.pending.points==0,"UI click not placed")
 TEST.blocked=false
-for i=1,5 do TEST.mx=i*10;TEST.my=i*20;PSSetup.click(0) end
-check(not PSSetup.active() and #TEST.commands==1,"single submit after fifth point")
+TEST.mx=10;TEST.my=20;PSSetup.click(0)
+TEST.mx=11;PSSetup.click(0)
+check(#PSSetup.pending.points==1 and #TEST.commands==0,"short goal line retries endpoint")
+TEST.mx=50;PSSetup.click(0)
+TEST.my=120;PSSetup.click(0)
+TEST.mx=10;PSSetup.click(0)
+check(not PSSetup.active() and #TEST.commands==1,"single submit after fourth point")
 local sent=TEST.commands[1]
-check(sent.command=="configure" and sent.args.goalA.ax==1 and sent.args.goalB.bx==4 and sent.args.center.x==5,"world coordinates sent")
+check(sent.command=="configure" and sent.args.goalA.ax==1 and sent.args.goalB.bx==1 and sent.args.center.x==3 and sent.args.center.y==7,"goal lines and automatic midpoint sent")
 PSSetup.begin(1);PSSetup.click(1);check(not PSSetup.active(),"right cancel")
 PSClient.selected=1;PSClient.charge={at=550,lob=true};PSClient.message="hello";PSClient.messageUntil=2000
 PSHUD.render(TEST.panel,PSClient)
@@ -30,6 +35,15 @@ end
 for _,d in ipairs(TEST.draws) do if d.x==520 and d.y==95 and d.w==120 then bar=true end end
 check(title and message,"title and message twelve o'clock")
 check(bar,"half-charge visible at top center")
+TEST.draws={};TEST.ball.h=.6
+PSHUD.render(TEST.panel,PSClient)
+local floorShadow,airGuide=false,false
+for _,d in ipairs(TEST.draws) do
+    if d.y==50 and d.x<50 and d.x+d.w>50 then floorShadow=true end
+    if d.x==49 and d.y<44 and d.w==2 then airGuide=true end
+end
+check(floorShadow and airGuide,"airborne ball keeps ground shadow and height guide")
+TEST.ball.h=0
 TEST.ball.match={scoreA=2,scoreB=1,phase="goal",lastScoringTeam="A",goals={}}
 TEST.texts={};PSHUD.render(TEST.panel,PSClient)
 check(TEST.texts[1].text=="A  2  :  1  B" and TEST.texts[2].text=="UI_PS_GoalA","score and goal message")

@@ -22,20 +22,20 @@ assert(S.isItemActive(p,p.items[1]))
 M.send(p,'start',{itemId=100}); assert(S.serial==1,'one ball per owner')
 M.send(other,'stop',{id=1}); assert(S.balls[1]==b,'only owner may end')
 M.send(other,'kick',{id=1,dx=1,dy=0,power=math.huge}); assert(b.vx==0)
-M.send(other,'kick',{id=1,dx=1,dy=0,power=1}); assert(b.vx==16,'other nearby players can kick')
-S.command(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==16,'rate limit')
+M.send(other,'kick',{id=1,dx=1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'other nearby players can kick')
+S.command(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'rate limit')
 other.x=20
-M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==16,'range validation')
+M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'range validation')
 other.x=.5; other.z=1
-M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==16,'floor validation')
+M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'floor validation')
 other.z=0; other.dead=true
-M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==16,'alive validation')
+M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'alive validation')
 other.dead=false; other.vehicle={}
-M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==16,'on-foot validation')
+M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'on-foot validation')
 other.vehicle=nil
 M.wall=function(a,c) return (a.x<1 and c.x>=1) or (c.x<1 and a.x>=1) end
 other.x=1.1
-M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==16,'wall blocks near-ball kick')
+M.send(other,'kick',{id=1,dx=-1,dy=0,power=1}); assert(b.vx==PSCore.maxSpeed,'wall blocks near-ball kick')
 M.tick(); M.time=M.time+250; M.tick()
 assert(b.x<1 and b.vx<0,'wall reflection authoritative')
 local bx,by,halt=S.collision(b,.5,.5,5.5,.5)
@@ -95,7 +95,7 @@ local snapshot=M.packets[#M.packets].args.balls[1].match
 snapshot.center.x=99; snapshot.teams.other='A'
 assert(matchBall.match.center.x==5 and matchBall.match.teams.other=='B','SP packets must not alias nested authoritative state')
 M.send(other,'kick',{id=2,dx=1,dy=0,power=1,lob=true})
-assert(matchBall.vz==8/PSCore.tilesPerFloor and matchBall.lob and matchBall.kicker=='other' and matchBall.kickSerial==1)
+assert(matchBall.vz==PSCore.maxSpeed*.5/PSCore.tilesPerFloor and matchBall.lob and matchBall.kicker=='other' and matchBall.kickSerial==1)
 matchBall.x=9.8; matchBall.h=0; matchBall.vz=0; matchBall.vx=16; matchBall.vy=0
 S.lastTick=M.time/1000; M.time=M.time+100; M.tick()
 assert(matchBall.match.phase=='goal' and matchBall.match.scoreA==1)
@@ -108,3 +108,49 @@ matchBall.x=100; matchBall.vx=1
 M.send(p,'reset',{id=2})
 assert(matchBall.x==5 and matchBall.vx==0 and matchBall.match.scoreA==1,'owner rescues stuck ball without clearing score')
 print('PASS soccer authoritative match setup, teams, lob, pause and SP snapshots')
+other.x=5; other.y=0; other.running=true; other.moving=true
+S.motion={}
+local initialSerial=matchBall.kickSerial
+M.send(other,'dribble',{id=2,dx=1,dy=0,power=1,lob=true})
+assert(matchBall.vx==PSCore.minSpeed and matchBall.vz==0 and matchBall.dribble,'running touch ignores client power and lob')
+assert(matchBall.kickSerial==initialSerial+1)
+S.command(other,'dribble',{id=2,dx=1,dy=0}); assert(matchBall.kickSerial==initialSerial+1,'dribble cooldown')
+local function denied(args,message)
+    local serial=matchBall.kickSerial
+    M.send(other,'dribble',args or {id=2,dx=1,dy=0})
+    assert(matchBall.kickSerial==serial,message)
+end
+other.running=false; denied(nil,'walking cannot auto dribble')
+other.sprinting=true; other.moving=false; denied(nil,'stationary run flag cannot dribble')
+other.moving=true
+denied({id=2,dx=0/0,dy=0},'NaN direction')
+denied({id=2,dx=2,dy=0},'oversized direction')
+denied({id=2,dx=-1,dy=0},'backward spoof against facing')
+matchBall.h=.01; denied(nil,'no airborne dribble'); matchBall.h=0
+matchBall.vz=.01; denied(nil,'no lifting ball touch'); matchBall.vz=0
+other.x=6; denied(nil,'contact range stricter than manual kick'); other.x=5
+other.z=1; denied(nil,'same floor required'); other.z=0
+matchBall.match.phase='goal'; denied(nil,'no goal-pause dribble'); matchBall.match.phase='play'
+other.x=5.2; matchBall.x=4.8
+M.wall=function(a,c) return a.x~=c.x end
+denied(nil,'wall blocks automatic touch'); M.wall=nil
+other.x=5; matchBall.x=5
+S.motion={}; M.time=M.time+600; M.tick()
+-- Server observes westward movement while facing still points east.
+other.x=4.9; matchBall.x=4.9; M.time=M.time+100; M.tick()
+local serial=matchBall.kickSerial
+S.command(other,'dribble',{id=2,dx=1,dy=0})
+assert(matchBall.kickSerial==serial,'measured movement overrides stale facing')
+M.time=M.time+401; other.x=4.8; matchBall.x=4.8; matchBall.h=0; matchBall.vz=0
+S.command(other,'dribble',{id=2,dx=-1,dy=0})
+assert(matchBall.vx==-PSCore.minSpeed and matchBall.kickSerial==serial+1,'sprinting dribble follows server-observed movement')
+-- A scoring tick publishes the frozen state immediately even inside cadence.
+matchBall.x=9.98; matchBall.y=0; matchBall.h=0; matchBall.vz=0; matchBall.vx=16; matchBall.vy=0
+matchBall.match.crossings={}; S.lastTick=M.time/1000; S.lastPublish=M.time/1000
+local revision=S.revision
+M.time=M.time+10; M.tick()
+assert(matchBall.match.phase=='goal' and matchBall.vx==0 and S.revision>revision,'goal immediately freezes and publishes')
+local scoredX=matchBall.x
+M.time=M.time+100; M.tick()
+assert(matchBall.x==scoredX and matchBall.vx==0,'goal ball stays frozen until reset')
+print('PASS bounded running dribble authority and immediate goal freeze')

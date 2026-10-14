@@ -1,7 +1,12 @@
 PSCore = PSCore or {}
 local C = PSCore
-C.maxSpeed = 16
+C.minSpeed = 3
+C.maxSpeed = 10.5
+C.groundDrag = 3
+C.airDrag = 1.8
 C.kickRange = 1.4
+C.dribbleRange = .8
+C.dribblePower = 0
 -- x/y use horizontal tile units; h/vz use world floor units. One rendered
 -- floor spans approximately three horizontal tiles vertically.
 C.tilesPerFloor = 3
@@ -23,7 +28,7 @@ function C.kick(b,dx,dy,power,lob)
         or (lob~=nil and type(lob)~='boolean') or power<0 or power>1 or math.abs(dx)>100000 or math.abs(dy)>100000 then return false end
     local length=math.sqrt(dx*dx+dy*dy)
     if length<.00001 or b.h>.35 then return false end
-    local speed=2+(C.maxSpeed-2)*power
+    local speed=C.minSpeed+(C.maxSpeed-C.minSpeed)*power
     -- Fixed 30-degree launch angle; power sets total launch speed.
     local horizontal=lob and speed*.8660254 or speed
     b.vx=dx/length*horizontal; b.vy=dy/length*horizontal; b.vz=lob and speed*.5/C.tilesPerFloor or 0
@@ -33,6 +38,7 @@ end
 -- freezes the ball at unavailable terrain instead of reflecting into the void.
 function C.step(b,dt,collision,onSegment)
     if not valid(b) or not C.finite(dt) or dt<=0 then return false end
+    if b.match and b.match.phase=='goal' then b.vx=0; b.vy=0; b.vz=0; return true end
     -- Bound catch-up after stalls. Never teleport a ball across a long pause.
     dt=math.min(dt,.25)
     local speed=math.sqrt(b.vx*b.vx+b.vy*b.vy)
@@ -53,10 +59,11 @@ function C.step(b,dt,collision,onSegment)
                 if b.vz<.3/C.tilesPerFloor then b.vz=0 end
             end
         end
-        if b.h==0 and b.vz==0 then
+        do
             local v=math.sqrt(b.vx*b.vx+b.vy*b.vy)
             if v>0 then
-                local nextV=math.max(0,v-1.8*slice)
+                local drag=(b.h==0 and b.vz==0) and C.groundDrag or C.airDrag
+                local nextV=math.max(0,v-drag*slice)
                 if nextV<.03 then nextV=0 end
                 b.vx=b.vx*nextV/v; b.vy=b.vy*nextV/v
             end
