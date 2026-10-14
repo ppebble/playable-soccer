@@ -1,5 +1,9 @@
 require "PS_Core"
 require "PS_Render"
+require "PS_Projection"
+require "PS_HUD"
+require "PS_Setup"
+require "PS_Motion"
 require "ISUI/ISPanel"
 require "TimedActions/ISTimedActionQueue"
 PSClient={state={balls={}},revision=-1,samples={},lastSync=0}
@@ -21,10 +25,15 @@ function C.send(command,args)
 end
 function C.releaseGuard()
     local g=C.guard;C.guard=nil
-    if g then g.player:setBannedAttacking(g.previous) end
+    if g then
+        g.player:setBannedAttacking(g.previous)
+        g.player:nullifyAiming()
+        g.player:setForceAim(g.forceAim)
+    end
 end
 function C.leave()
     C.selected=nil;C.charge=nil;C.pendingItem=nil;C.releaseGuard()
+    PSSetup.cancel()
 end
 function C.start(p,item)
     if p~=player() or not item or item:getFullType()~="PlayableSoccer.SportsSoccerBall" then return end
@@ -56,6 +65,9 @@ function C.receive(command,args)
         if b.id and PSCore.finite(b.x) and PSCore.finite(b.y) and PSCore.finite(b.z) and PSCore.finite(b.h) then
             local prior=C.samples[b.id]
             samples[b.id]={a=prior and prior.b or b,b=b,at=t,duration=prior and math.min(250,math.max(1,t-prior.at)) or 1}
+            if prior and b.kickSerial and b.kickSerial~=(prior.b.kickSerial or 0) and player() and b.kicker==owner(player()) then
+                PSMotion.play(player(),b.lob==true,b.kickDx,b.kickDy)
+            end
             if C.pendingItem==b.itemId and player() and b.owner==owner(player()) then
                 C.selected=b.id;C.pendingItem=nil
             end
@@ -78,7 +90,13 @@ function C.blocked()
     local p=player()
     if not p or p:isDead() or p:getVehicle() or (isGamePaused and isGamePaused()) or getCore():isDoingTextEntry() then return true end
     local q=ISTimedActionQueue.getTimedActionQueue(p)
-    if q and #q.queue>0 then return true end
+    if q then
+        for _,action in ipairs(q.queue) do
+            -- Our event-free foot gesture must not interrupt dribbling input.
+            -- Exact class identity leaves every unrelated timed action gated.
+            if not PS_KickAction or getmetatable(action)~=PS_KickAction then return true end
+        end
+    end
     if getCell():getDrag(0) then return true end
     local uis=UIManager.getUI()
     for i=0,uis:size()-1 do
@@ -90,28 +108,73 @@ end
 function C.ready()
     local p=player();local b=C.ball(C.selected)
     return p and b and C.receivedAt and now()-C.receivedAt<3000 and math.floor(p:getZ())==b.z
-        and PSRender.available() and b.h<=.35 and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=PSCore.kickRange^2 and not C.blocked()
+        and PSRender.available() and PSProjection.available() and not PSSetup.active() and b.h<=.35 and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=PSCore.kickRange^2 and not C.blocked()
+end
+function C.inputActive()
+    return C.selected and C.ball(C.selected) and C.receivedAt and now()-C.receivedAt<3000
+        and not PSSetup.active() and not C.blocked()
+end
+function C.capture(button)
+    -- Native capture affects key bindings, not the raw button used by our gauge.
+    -- The engine clears this press-scoped capture when the button is released.
+    Mouse.UIBlockButtonDown(button)
+end
+function C.guardInput(p)
+    if not C.guard then C.guard={player=p,previous=p:isBannedAttacking(),forceAim=p:isForceAim()} end
+    p:setBannedAttacking(true);p:nullifyAiming()
+    if isMouseButtonDown(0) then C.capture(0) end
+    if isMouseButtonDown(1) then C.capture(1) end
+end
+function C.beginCharge(button)
+    if not C.inputActive() then return end
+    C.guardInput(player());C.capture(button)
+    if button==1 then C.rightCaptured=true end
+    if C.ready() and not C.charge and not isMouseButtonDown(1-button) then
+        C.charge={at=now(),id=C.selected,button=button,lob=button==1}
+    end
 end
 function C.mouseDown()
-    -- World-only event: UI clicks never begin a charge.
-    if C.ready() and not isMouseButtonDown(1) then C.charge={at=now(),id=C.selected} end
+    if PSSetup.active() then PSSetup.click(0);return end
+    C.beginCharge(0)
+end
+function C.rightDown()
+    if PSSetup.active() and not C.blocked() then
+        C.rightCaptured=true;C.capture(1);PSSetup.cancel();return
+    end
+    C.beginCharge(1)
+end
+function C.rightUp()
+    if C.rightCaptured then
+        -- OnRightMouseUp precedes the native object's right-up callback.
+        -- Cancel only the click we captured, including after Escape/UI/death.
+        if ISObjectClickHandler then ISObjectClickHandler.rdownObject=nil end
+        UIManager.setRightDownObject(nil)
+        C.rightCaptured=nil
+    end
+end
+function C.keyPressed(key)
+    if key~=Keyboard.KEY_ESCAPE then return end
+    if PSSetup.active() then PSSetup.cancel()
+    elseif C.charge then C.charge=nil
+    elseif C.selected then C.leave() end
 end
 function C.update(p)
     if p~=player() then return end
+    if C.rightCaptured and not isMouseButtonDown(1) then C.rightUp() end
     if C.pendingItem and now()-(C.pendingAt or 0)>5000 then C.pendingItem=nil;C.notice("UI_PS_StartFailed") end
-    if C.ready() then
-        if not C.guard then C.guard={player=p,previous=p:isBannedAttacking()} end
-        p:setBannedAttacking(true)
+    if C.inputActive() then C.guardInput(p)
     else C.charge=nil;C.releaseGuard() end
+    if not C.ready() then C.charge=nil end
     if C.charge then
-        if isMouseButtonDown(1) then C.charge=nil
-        elseif not isMouseButtonDown(0) then
+        if isMouseButtonDown(1-C.charge.button) then C.charge=nil
+        elseif not isMouseButtonDown(C.charge.button) then
             local charge=C.charge;C.charge=nil
             local b=C.ball(charge.id)
             if b then
-                local x=screenToIsoX(0,getMouseX(),getMouseY(),b.z)
-                local y=screenToIsoY(0,getMouseX(),getMouseY(),b.z)
-                C.send("kick",{id=b.id,dx=x-b.x,dy=y-b.y,power=math.min(1,math.max(0,(now()-charge.at)/900))})
+                local x,y=PSProjection.screenToWorld(0,getMouseX(),getMouseY(),b.z)
+                if PSCore.finite(x) and PSCore.finite(y) then
+                    C.send("kick",{id=b.id,dx=x-b.x,dy=y-b.y,lob=charge.lob,power=math.min(1,math.max(0,(now()-charge.at)/900))})
+                end
             end
         end
     end
@@ -120,6 +183,7 @@ end
 function C.context(index,context,objects,test)
     if index~=0 or test then return end
     local p=player();if not p then return end
+    PSSetup.menu(index,context,C)
     local nearest,distance=nil,64
     for _,b in pairs(C.state.balls) do
         local d=(p:getX()-b.x)^2+(p:getY()-b.y)^2
@@ -136,29 +200,24 @@ end
 local Overlay=ISPanel:derive("PSOverlay")
 function Overlay:prerender() end -- HUD only; never draw ISPanel's fullscreen background.
 function Overlay:render()
-    if C.selected then
-        self:drawText(getText("UI_PS_Controls"),20,80,1,1,1,1,UIFont.Small)
-        if C.charge then
-            local power=math.min(1,(now()-C.charge.at)/900)
-            self:drawRect(20,105,160,12,0.8,0,0,0)
-            self:drawRect(21,106,158*power,10,1,power,1-power,0.2)
-        end
-    end
-    if C.message and now()<(C.messageUntil or 0) then self:drawText(C.message,20,130,1,0.8,0.3,1,UIFont.Small) end
+    PSHUD.render(self,C)
 end
 function C.reset()
-    C.leave();C.state={balls={}};C.samples={};C.revision=-1;C.receivedAt=nil;PSRender.clear()
+    C.leave();C.rightUp();C.state={balls={}};C.samples={};C.revision=-1;C.receivedAt=nil;PSRender.clear()
     if C.overlay then C.overlay:removeFromUIManager();C.overlay=nil end
 end
 Events.OnGameStart.Add(function()
     C.reset()
-    C.overlay=Overlay:new(0,0,getCore():getScreenWidth(),getCore():getScreenHeight())
+    C.overlay=Overlay:new(0,0,0,0)
     C.overlay.background=false
-    C.overlay:initialise();C.overlay:setConsumeMouseEvents(false);C.overlay:addToUIManager()
+    C.overlay:initialise();C.overlay:instantiate();C.overlay:setWantMouseEvents(false);C.overlay:setConsumeMouseEvents(false);C.overlay:addToUIManager()
     C.send("sync",{})
 end)
 Events.OnServerCommand.Add(function(module,command,args) if module=="PlayableSoccer" then C.receive(command,args) end end)
 Events.OnMouseDown.Add(C.mouseDown)
+Events.OnRightMouseDown.Add(C.rightDown)
+Events.OnRightMouseUp.Add(C.rightUp)
+Events.OnKeyPressed.Add(C.keyPressed)
 Events.OnPlayerUpdate.Add(C.update)
 Events.OnFillWorldObjectContextMenu.Add(C.context)
 Events.OnPostRender.Add(function()

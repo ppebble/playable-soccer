@@ -10,14 +10,29 @@ C.receive("state",state(1));assert(C.selected==1)
 TEST.buttons[0]=true;C.mouseDown();assert(C.charge)
 TEST.time=1450;TEST.buttons[0]=false;C.update(TEST.player)
 assert(TEST.sent[#TEST.sent].command=="kick" and TEST.sent[#TEST.sent].args.power==0.5)
+assert(TEST.sent[#TEST.sent].args.lob==false and TEST.sent[#TEST.sent].args.dx==7)
 assert(TEST.banned)
 TEST.buttons[0]=true;C.mouseDown();TEST.buttons[1]=true;C.update(TEST.player);assert(not C.charge)
 TEST.buttons[1]=false
+TEST.buttons[0]=false
+TEST.buttons[1]=true;C.rightDown();assert(C.charge.lob and C.charge.button==1 and TEST.captured[1])
+TEST.time=TEST.time+450;TEST.buttons[1]=false
+ISObjectClickHandler.rdownObject={};TEST.rightObject={};C.rightUp()
+assert(ISObjectClickHandler.rdownObject==nil and TEST.rightObject==nil)
+C.update(TEST.player);assert(TEST.sent[#TEST.sent].command=="kick" and TEST.sent[#TEST.sent].args.lob==true)
 TEST.typing=true;C.mouseDown();C.update(TEST.player);assert(not C.charge and not TEST.banned)
 TEST.typing=false;TEST.paused=true;C.mouseDown();assert(not C.charge);TEST.paused=false
 TEST.uis={{isVisible=function() return true end,isConsumeMouseEvents=function() return true end,isPointOver=function() return true end}}
 C.mouseDown();assert(not C.charge);TEST.uis={}
 TEST.queue={true};C.mouseDown();assert(not C.charge);TEST.queue={}
+-- Only the owned cosmetic action may keep dribble input and RMB capture alive.
+TEST.queue={setmetatable({},PS_KickAction)};C.update(TEST.player)
+assert(not C.blocked() and TEST.banned)
+TEST.buttons[1]=true;C.rightDown();assert(C.charge and C.charge.lob)
+C.keyPressed(Keyboard.KEY_ESCAPE);TEST.buttons[1]=false;C.rightUp()
+TEST.queue={setmetatable({},PS_KickAction),{Type="PS_KickAction"}}
+C.update(TEST.player);assert(C.blocked() and not TEST.banned)
+TEST.queue={}
 TEST.drag=true;C.mouseDown();assert(not C.charge);TEST.drag=nil
 TEST.time=1500;C.receive("state",state(2,2))
 TEST.time=1625;local pos=C.positions()[1];assert(pos.x>1 and pos.x<2)
@@ -25,8 +40,8 @@ C.receive("state",state(1,99));assert(C.ball(1).x==2)
 PSRender.draw(C.positions());assert(TEST.renders==1 and TEST.lastItem~=item and TEST.lastItem.type=="PlayableSoccer.SportsSoccerBall")
 assert(PSRender.proxies[1])
 PSRender.draw({});assert(not PSRender.proxies[1])
--- Moving out of reach restores the prior attack policy, without deleting ball.
-C.receive("state",state(3,8));C.update(TEST.player);assert(not TEST.banned and C.ball(1))
+-- Out of reach still owns soccer controls; Escape restores native input.
+C.receive("state",state(3,8));C.update(TEST.player);assert(TEST.banned and C.ball(1))
 C.stop();assert(C.selected==nil and TEST.sent[#TEST.sent].command=="stop")
 C.receive("state",{revision=4,balls={}});assert(not C.isItemActive(TEST.player,item))
 -- Explicit owner stop remains reachable after leaving input mode.
@@ -44,9 +59,29 @@ C.receive("state",state(7));C.selected=1;TEST.banned=true;C.update(TEST.player)
 C.leave();assert(TEST.banned);TEST.banned=false
 Events.OnGameStart.callback()
 assert(C.overlay.background==false and C.overlay.consume==false)
+assert(C.overlay.instantiated and C.overlay.wantMouse==false)
+C.overlay:render();assert(TEST.hudRendered)
 C.overlay:prerender() -- No draw methods provided: a background draw would fail.
 TEST.no3D=true
 C.start(TEST.player,item);assert(not C.pendingItem and C.message=="UI_PS_RenderError")
 assert(PSRender.draw({{id=1,x=1,y=1,z=0,h=0}})==false)
 TEST.no3D=false
+-- Exact prior force-aim/attack values restored at UI, death, and explicit exit.
+C.receive("state",state(8));C.selected=1;TEST.forceAim=true;C.update(TEST.player)
+assert(not TEST.forceAim)
+TEST.typing=true;C.update(TEST.player);assert(TEST.forceAim and not TEST.banned)
+TEST.typing=false;TEST.forceAim=false;C.update(TEST.player)
+TEST.buttons[1]=true;C.rightDown();C.keyPressed(Keyboard.KEY_ESCAPE)
+assert(not C.charge and C.selected==1)
+C.keyPressed(Keyboard.KEY_ESCAPE);assert(not C.selected and not TEST.banned)
+TEST.buttons[1]=false;ISObjectClickHandler.rdownObject={};C.rightUp();assert(not ISObjectClickHandler.rdownObject)
+local ordinaryClick={};ISObjectClickHandler.rdownObject=ordinaryClick;C.rightUp();assert(ISObjectClickHandler.rdownObject==ordinaryClick)
+C.selected=1;C.update(TEST.player);TEST.dead=true;C.update(TEST.player);assert(not C.guard and not TEST.banned);TEST.dead=false
+TEST.noProjection=true;C.mouseDown();assert(not C.charge);TEST.noProjection=false
+C.leave();TEST.setup=true;C.mouseDown();assert(TEST.setupClicked and not C.charge)
+C.keyPressed(Keyboard.KEY_ESCAPE);assert(not TEST.setup)
+-- Accepted local kick serial triggers once; sync replay must not animate again.
+local accepted=state(9);accepted.balls[1].kickSerial=1;accepted.balls[1].kicker="test";accepted.balls[1].kickDx=1;accepted.balls[1].kickDy=0;accepted.balls[1].lob=true
+C.receive("state",accepted);assert(TEST.motions==1 and TEST.motionLob)
+C.receive("state",accepted);assert(TEST.motions==1)
 print("PASS client charge, cancellation, UI gates, interpolation and detached proxy")

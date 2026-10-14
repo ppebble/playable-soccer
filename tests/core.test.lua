@@ -45,3 +45,14 @@ assert(not C.step(paused,-1) and paused.x==0)
 C.step(paused,3600)
 assert(paused.x<=4,'wall clock stalls must not advance an hour of travel')
 print('PASS soccer core persistent physics')
+local lob=assert(C.newBall(0,0,0))
+assert(not C.kick(lob,1,0,1,'yes'),'lob must be boolean')
+assert(C.kick(lob,1,0,1,true) and lob.vz==8/C.tilesPerFloor)
+local peak=0
+for i=1,2000 do C.step(lob,.01); peak=math.max(peak,lob.h) end
+assert(peak>1 and peak<1.1 and lob.x>15,'maximum lob apex is about 1.09 world floors')
+assert(peak*C.tilesPerFloor>3 and peak*C.tilesPerFloor<3.3,'vertical floor units preserve the physical launch angle')
+assert(lob.h==0 and lob.vz==0 and lob.vx==0,'lob lands and eventually rests')
+local short=assert(C.newBall(0,0,0)); C.kick(short,1,0,.1,true)
+for i=1,2000 do C.step(short,.01) end
+assert(short.x<lob.x and short.h==0,'charge controls lob distance')

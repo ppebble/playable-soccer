@@ -68,3 +68,43 @@ M.mp=false; p.x=.5; p.z=0; p.name=''
 M.send(p,'start',{itemId=100}); assert(S.balls[2].owner=='local:0')
 M.send(p,'sync',{}); assert(M.packets[#M.packets].sp,'singleplayer response routing')
 print('PASS soccer server authority, collision and persistent session')
+local matchBall=S.balls[2]
+p.x=5; p.y=0; other.x=5; other.y=0
+local config={id=2,goalA={ax=0,ay=-2,bx=0,by=2},goalB={ax=10,ay=-2,bx=10,by=2},center={x=5,y=0}}
+M.send(other,'configure',config); assert(not matchBall.match,'owner-only setup')
+config.center.x=0/0
+M.send(p,'configure',config); assert(not matchBall.match,'reject NaN setup')
+config.center.x=5
+M.unloaded=true
+M.send(p,'configure',config); assert(not matchBall.match,'loaded setup required')
+M.unloaded=false
+M.square(0,0,0).solid=true
+M.send(p,'configure',config); assert(not matchBall.match,'goal mouth must be clear')
+M.square(0,0,0).solid=false
+M.wall=function(a,c) return (a.x<0 and c.x>=0) or (c.x<0 and a.x>=0) end
+M.send(p,'configure',config); assert(not matchBall.match,'wall across goal rejected')
+M.wall=nil; p.x=100
+M.send(p,'configure',config); assert(not matchBall.match,'setup must be nearby')
+p.x=5
+M.send(p,'configure',config)
+assert(matchBall.match and matchBall.x==5 and matchBall.match.teams['local:0']=='A')
+M.send(other,'team',{id=2,team='B'}); assert(matchBall.match.teams.other=='B')
+M.send(other,'team',{id=2,team='C'}); assert(matchBall.match.teams.other=='B')
+M.send(p,'sync',{})
+local snapshot=M.packets[#M.packets].args.balls[1].match
+snapshot.center.x=99; snapshot.teams.other='A'
+assert(matchBall.match.center.x==5 and matchBall.match.teams.other=='B','SP packets must not alias nested authoritative state')
+M.send(other,'kick',{id=2,dx=1,dy=0,power=1,lob=true})
+assert(matchBall.vz==8/PSCore.tilesPerFloor and matchBall.lob and matchBall.kicker=='other' and matchBall.kickSerial==1)
+matchBall.x=9.8; matchBall.h=0; matchBall.vz=0; matchBall.vx=16; matchBall.vy=0
+S.lastTick=M.time/1000; M.time=M.time+100; M.tick()
+assert(matchBall.match.phase=='goal' and matchBall.match.scoreA==1)
+other.x=matchBall.x
+M.send(other,'kick',{id=2,dx=-1,dy=0,power=1}); assert(matchBall.vx==0,'no kicks during goal pause')
+M.send(other,'reset',{id=2}); assert(matchBall.match.phase=='goal','owner-only reset')
+M.time=M.time+2000; M.tick()
+assert(S.balls[2]==matchBall and matchBall.id==2 and matchBall.x==5 and matchBall.match.phase=='play','automatic reset retains identity')
+matchBall.x=100; matchBall.vx=1
+M.send(p,'reset',{id=2})
+assert(matchBall.x==5 and matchBall.vx==0 and matchBall.match.scoreA==1,'owner rescues stuck ball without clearing score')
+print('PASS soccer authoritative match setup, teams, lob, pause and SP snapshots')

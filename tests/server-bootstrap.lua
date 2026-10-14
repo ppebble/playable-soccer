@@ -3,7 +3,7 @@ local M=ServerMock
 local function list(t) return {size=function() return #t end,get=function(_,i) return t[i+1] end} end
 function isClient() return false end
 function isServer() return M.mp end
-function require(name) assert(name=='PS_Core') end
+function require(name) assert(name=='PS_Core' or name=='PS_Match') end
 function getTimestampMs() return M.time end
 function getOnlinePlayers() return list(M.players) end
 function getSpecificPlayer(i) return M.players[i+1] end
