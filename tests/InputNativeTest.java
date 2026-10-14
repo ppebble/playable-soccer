@@ -1,5 +1,7 @@
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.file.*;
+import java.util.Arrays;
 
 /** Exercises installed press capture, not a running UI or multiplayer client. */
 public final class InputNativeTest {
@@ -51,10 +53,10 @@ public final class InputNativeTest {
                 Events.OnGameStart.callback()
                 assert(TEST.registered==1)
                 assert(PSClient.overlay.javaObject.consume==false)
-                assert(PSClient.overlay.width==1280 and PSClient.overlay.height==720)
+                assert(PSClient.overlay.width==0 and PSClient.overlay.height==0)
                 assert(TEST.sent[#TEST.sent].command=='sync')
                 TEST.width=1600;TEST.height=900;PSClient.overlay:render()
-                assert(PSClient.overlay.width==1600 and PSClient.overlay.height==900)
+                assert(PSClient.overlay.width==0 and PSClient.overlay.height==0)
                 assert(TEST.hudRendered)
                 local ui=PSClient.overlay
                 local rects={}
@@ -86,12 +88,77 @@ public final class InputNativeTest {
                 TEST.typing=false;TEST.dead=true
                 ui:onKeyPress(esc);ui:onKeyRelease(esc)
                 assert(not ui:isKeyConsumed(esc))
+                -- A real vanilla panel's empty callbacks return nil, which the
+                -- native dispatch treats as consumption even with consume=false.
+                PSNativeBaseline=ISPanel:new(0,0,1600,900)
+                PSNativeBaseline:initialise();PSNativeBaseline:setWantMouseEvents(false)
+                assert(PSNativeBaseline:onMouseUp(10,10)==nil)
+                assert(PSNativeBaseline:onRightMouseDown(10,10)==nil)
+                assert(PSNativeBaseline:onRightMouseUp(10,10)==nil)
+                for _,selected in ipairs({false,1}) do
+                    PSClient.selected=selected or nil
+                    for _,name in ipairs({'onMouseDown','onMouseUp','onRightMouseDown','onRightMouseUp','onMouseMove','onMouseWheel'}) do
+                        assert(ui[name](ui,10,10)==false, name..' must explicitly return false before and during soccer')
+                    end
+                end
+                PSClient.selected=nil
+                PSNativeOverlay=ui
                 """);
             Path repo=mod.toAbsolutePath().getParent().getParent().getParent().getParent();
-            LuaHarness.main(new String[]{repo.resolve("tests/client-bootstrap.lua").toString(),bootstrap.toString(),
+            Object env=runNativeEnvironment(new String[]{repo.resolve("tests/client-bootstrap.lua").toString(),bootstrap.toString(),
                 "media/lua/shared/ISBaseObject.lua","media/lua/client/ISUI/ISUIElement.lua","media/lua/client/ISUI/ISPanel.lua",
                 mod.resolve("media/lua/client/PS_Client.lua").toString(),assertion.toString()});
-            System.out.println("PASS installed Lua ISPanel/ISUIElement production HUD startup, no nonexistent Java-only wrapper, resize and click-through contract; native UI stubbed");
+            checkNativeDispatch(nativeUI,env);
+            System.out.println("PASS installed Lua HUD startup and actual native mouse dispatch/hit-test: baseline consumes RMB, zero-area production overlay passes buttons and inventory hit-testing; rendering stubbed, not live gameplay");
         } finally {Files.deleteIfExists(bootstrap);Files.deleteIfExists(assertion);}
+    }
+    static Object runNativeEnvironment(String[] files) throws Exception {
+        Class<?> table=Class.forName("se.krka.kahlua.vm.KahluaTable"), platformType=Class.forName("se.krka.kahlua.vm.Platform");
+        Class<?> platformClass=Class.forName("se.krka.kahlua.j2se.J2SEPlatform");
+        Object platform=platformClass.getMethod("getInstance").invoke(null);
+        Object env=platformClass.getMethod("newEnvironment").invoke(platform);
+        Class<?> threadType=Class.forName("se.krka.kahlua.vm.KahluaThread");
+        Object thread=threadType.getConstructor(platformType,table).newInstance(platform,env);
+        threadType.getField("debugOwnerThread").set(thread,Thread.currentThread());
+        Class<?> manager=Class.forName("zombie.Lua.LuaManager");
+        manager.getField("thread").set(null,thread);manager.getField("env").set(null,env);
+        Class<?> converters=Class.forName("se.krka.kahlua.converter.KahluaConverterManager");
+        Object caller=Class.forName("se.krka.kahlua.integration.LuaCaller").getConstructor(converters).newInstance(converters.getConstructor().newInstance());
+        manager.getField("caller").set(null,caller);
+        Method compile=Class.forName("se.krka.kahlua.luaj.compiler.LuaCompiler").getMethod("loadstring",String.class,String.class,table);
+        Method run=threadType.getMethod("pcall",Object.class,Object[].class);
+        for(String file:files) {
+            Object chunk=compile.invoke(null,Files.readString(Path.of(file)),file,env);
+            Object[] result=(Object[])run.invoke(thread,chunk,new Object[0]);
+            if(!Boolean.TRUE.equals(result[0])) throw new AssertionError(file+": "+Arrays.toString(result));
+        }
+        return env;
+    }
+    static void checkNativeDispatch(Class<?> nativeUI,Object env) throws Exception {
+        Class<?> table=Class.forName("se.krka.kahlua.vm.KahluaTable");
+        Method get=table.getMethod("rawget",Object.class);
+        Object baseline=nativeUI.getConstructor(table).newInstance(get.invoke(env,"PSNativeBaseline"));
+        Object overlay=nativeUI.getConstructor(table).newInstance(get.invoke(env,"PSNativeOverlay"));
+        for(Object ui:new Object[]{baseline,overlay}) {
+            nativeUI.getMethod("setWidth",double.class).invoke(ui,1600d);
+            nativeUI.getMethod("setHeight",double.class).invoke(ui,900d);
+            nativeUI.getMethod("setConsumeMouseEvents",boolean.class).invoke(ui,false);
+        }
+        Method down=nativeUI.getMethod("onConsumeMouseButtonDown",int.class,double.class,double.class);
+        Method up=nativeUI.getMethod("onConsumeMouseButtonUp",int.class,double.class,double.class);
+        boolean baselineRightDown=(boolean)down.invoke(baseline,1,10d,10d),baselineRightUp=(boolean)up.invoke(baseline,1,10d,10d),baselineLeftUp=(boolean)up.invoke(baseline,0,10d,10d);
+        if(!baselineRightDown || !baselineRightUp || baselineLeftUp)
+            throw new AssertionError("Installed native dispatch must reproduce inherited nil-callback capture: "+baselineRightDown+","+baselineRightUp+","+baselineLeftUp);
+        for(int button:new int[]{0,1}) {
+            if((boolean)down.invoke(overlay,button,10d,10d) || (boolean)up.invoke(overlay,button,10d,10d))
+                throw new AssertionError("HUD swallowed world button "+button);
+        }
+        Method hit=nativeUI.getMethod("isPointOver",double.class,double.class);
+        if(!(boolean)hit.invoke(baseline,100d,100d)) throw new AssertionError("Fullscreen baseline must obstruct inventory world drop despite consume=false");
+        nativeUI.getMethod("setWidth",double.class).invoke(overlay,0d);
+        nativeUI.getMethod("setHeight",double.class).invoke(overlay,0d);
+        for(double[] point:new double[][]{{0,0},{100,100},{1599,899}}) {
+            if((boolean)hit.invoke(overlay,point[0],point[1])) throw new AssertionError("Zero-area HUD obstructed world/inventory hit-test");
+        }
     }
 }

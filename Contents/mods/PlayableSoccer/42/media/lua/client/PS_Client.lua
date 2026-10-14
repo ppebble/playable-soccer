@@ -218,6 +218,14 @@ function C.context(index,context,objects,test)
     end
 end
 local Overlay=ISPanel:derive("PSOverlay")
+-- Native right-click dispatch treats a Lua nil return as consumed even when
+-- consumeMouseEvents=false. Every HUD mouse callback must explicitly pass.
+function Overlay:onMouseDown() return false end
+function Overlay:onMouseUp() return false end
+function Overlay:onRightMouseDown() return false end
+function Overlay:onRightMouseUp() return false end
+function Overlay:onMouseMove() return false end
+function Overlay:onMouseWheel() return false end
 local function ownsEscape()
     local p=player()
     return p and not p:isDead() and not (isGamePaused and isGamePaused())
@@ -238,9 +246,6 @@ function Overlay:isKeyConsumed(key)
 end
 function Overlay:prerender() end -- HUD only; never draw ISPanel's fullscreen background.
 function Overlay:render()
-    local core=getCore()
-    if self.width~=core:getScreenWidth() then self:setWidth(core:getScreenWidth()) end
-    if self.height~=core:getScreenHeight() then self:setHeight(core:getScreenHeight()) end
     PSHUD.render(self,C)
 end
 function C.reset()
@@ -249,7 +254,10 @@ function C.reset()
 end
 Events.OnGameStart.Add(function()
     C.reset()
-    C.overlay=Overlay:new(0,0,getCore():getScreenWidth(),getCore():getScreenHeight())
+    -- Inventory world-drop and other UI hit tests ignore consumeMouseEvents.
+    -- A top-level zero-area panel can draw HUD coordinates without owning any
+    -- screen area; keyboard delivery does not require a mouse hit rectangle.
+    C.overlay=Overlay:new(0,0,0,0)
     C.overlay.background=false
     C.overlay:initialise()
     C.overlay:setWantMouseEvents(false)

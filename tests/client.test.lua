@@ -61,9 +61,12 @@ Events.OnGameStart.callback()
 assert(C.overlay.background==false and C.overlay.consume==false)
 assert(C.overlay.instantiated and C.overlay.wantMouse==false)
 C.overlay:render();assert(TEST.hudRendered)
-assert(C.overlay.width==1280 and C.overlay.height==720)
+assert(C.overlay.width==0 and C.overlay.height==0)
 TEST.width=1600;TEST.height=900;C.overlay:render()
-assert(C.overlay.width==1600 and C.overlay.height==900)
+assert(C.overlay.width==0 and C.overlay.height==0)
+for _,name in ipairs({'onMouseDown','onMouseUp','onRightMouseDown','onRightMouseUp','onMouseMove','onMouseWheel'}) do
+    assert(C.overlay[name](C.overlay,0,0)==false, 'HUD must explicitly pass '..name)
+end
 C.overlay:prerender() -- No draw methods provided: a background draw would fail.
 TEST.no3D=true
 C.start(TEST.player,item);assert(not C.pendingItem and C.message=="UI_PS_RenderError")
