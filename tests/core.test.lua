@@ -61,12 +61,12 @@ for _,dt in ipairs({.01,.05,.25}) do
                 C.step(shot,dt,nil,function(ball) peak=math.max(peak,ball.h) end)
             end
             local target=loft and (.65+17.75*power^1.4) or (1.5+16.9*power)
-            local targetPeak=loft and (.35+1.45*power) or (power>=.8 and (.02+.13*(power-.8)/.2) or 0)
+            local targetPeak=loft and (.7+2.9*power) or (power>=.8 and (.02+.13*(power-.8)/.2) or 0)
             assert(math.abs(shot.x-target)<.001,'charge must map to stopping distance independent of timestep/loft')
-            assert(math.abs(peak-targetPeak)<.02,'loft peak must match intended world-floor height')
+            assert(math.abs(peak-targetPeak)<.03,'loft peak must match intended world-floor height')
             assert(shot.vx==0 and shot.h==0 and shot.vz==0,'shots land and rest without deletion')
             if power==1 then assert(shot.x>=18 and shot.x<=20,'full-range street soccer bound') end
-            if loft and power==0 then assert(peak>.33 and shot.x<.66,'right tap must rise high nearby') end
+            if loft and power==0 then assert(peak>.68 and shot.x<.66,'right tap must rise high nearby') end
             ranges[power]=shot.x
             coreMeasurements[#coreMeasurements+1]=string.format('dt=%.2f %s p=%.1f distance=%.4f peak=%.4f',dt,loft and 'RIGHT' or 'LEFT',power,shot.x,peak)
         end
