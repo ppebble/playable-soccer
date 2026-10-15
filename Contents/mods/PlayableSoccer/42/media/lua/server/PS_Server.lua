@@ -181,13 +181,22 @@ local function zonesFor(match,b)
     end
     local goal=match.goals.B
     local gx,gy=(goal.ax+goal.bx)/2,(goal.ay+goal.by)/2
-    local x,y=gx+goal.nx*3,gy+goal.ny*3
-    local clear=clearPoint(x,y,b.z) and clearPath(b,match.center.x,match.center.y,x,y)
-        and clearPath(b,x,y,gx-goal.nx*.3,gy-goal.ny*.3)
-    for _,offset in ipairs({{.9,0},{-.9,0},{0,.9},{0,-.9}}) do
-        if not clearPoint(x+offset[1],y+offset[2],b.z) or not clearPath(b,x,y,x+offset[1],y+offset[2]) then clear=false end
+    local a=match.goals.A
+    local depth=((a.ax+a.bx)/2-gx)*goal.nx+((a.ay+a.by)/2-gy)*goal.ny
+    local inward=math.min(8,depth*.65)
+    -- Try the two wide flanks only. Never silently fall back to the center.
+    for _,side in ipairs({1,-1}) do
+        local x,y=gx+goal.nx*inward-goal.ny*5*side,gy+goal.ny*inward+goal.nx*5*side
+        local clear=clearPoint(x,y,b.z) and clearPath(b,match.center.x,match.center.y,x,y)
+            and clearPath(b,x,y,gx-goal.nx*.3,gy-goal.ny*.3)
+        for _,other in pairs(zones) do
+            if (x-other.x)^2+(y-other.y)^2<=(.9+other.r)^2 then clear=false end
+        end
+        for _,offset in ipairs({{.9,0},{-.9,0},{0,.9},{0,-.9}}) do
+            if not clearPoint(x+offset[1],y+offset[2],b.z) or not clearPath(b,x,y,x+offset[1],y+offset[2]) then clear=false end
+        end
+        if clear then zones.shooter={x=x,y=y,r=.9};break end
     end
-    if clear then zones.shooter={x=x,y=y,r=.9} end
     return zones
 end
 local function zoneCapture(b,t)

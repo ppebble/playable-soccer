@@ -6,6 +6,7 @@ public final class MotionNativeTest {
     public static void main(String[] args) throws Exception {
         verifyFall();
         verifySoccerFall(args[0]);
+        verifyNodeCache();
         verifyTackle(args[0]);
         verifyStrongKick(args[0]);
         Class<?> nodeType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNode");
@@ -89,7 +90,7 @@ public final class MotionNativeTest {
         if(nodeType.getField("useDeferredMovement").getBoolean(node) || nodeType.getField("deferredRotationScale").getFloat(node)!=0) throw new AssertionError("Strong kick cannot drive root motion");
         if(!((List<?>)nodeType.getField("events").get(node)).isEmpty()) throw new AssertionError("Strong kick must not trigger combat");
         Object values=vars.getConstructor().newInstance();
-        for(String name:new String[]{"PS_StrongKickGesture","PS_KickGesture","PS_ShoulderTackle","Stomp","","Eat"}) {
+        for(String name:new String[]{"PS_StrongKickGesture","PS_KickGesture","PS_PushTackle","Stomp","","Eat"}) {
             vars.getMethod("setVariable",String.class,String.class).invoke(values,"PerformingAction",name);
             boolean selected=(Boolean)nodeType.getMethod("checkConditions",source).invoke(node,values);
             if(selected!=name.equals("PS_StrongKickGesture")) throw new AssertionError("Strong kick action condition leaks");
@@ -108,20 +109,68 @@ public final class MotionNativeTest {
         if(last/Double.parseDouble(rate.group(1))/speed+blend>32.0/30) throw new AssertionError("Strong kick timeout truncates clip");
         System.out.println("PASS strong kick native variant, body mask, no combat/root motion and duration; appearance untested");
     }
+    private static void verifyNodeCache() throws Exception {
+        Class<?> managerType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNodeAssetManager");
+        Class<?> baseManager=Class.forName("zombie.asset.AssetManager");
+        Class<?> pathType=Class.forName("zombie.asset.AssetPath");
+        Class<?> assetType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNodeAsset");
+        Class<?> status=Class.forName("zombie.asset.Asset$State");
+        Object manager=managerType.getField("instance").get(null);
+        Object path=pathType.getConstructor(String.class).newInstance("ps-test-cached-node.xml");
+        var constructor=assetType.getDeclaredConstructor(pathType,baseManager);constructor.setAccessible(true);
+        Object cached=constructor.newInstance(path,manager);
+        assetType.getMethod("onCreated",status).invoke(cached,status.getField("READY").get(null));
+        Map<Object,Object> table=(Map<Object,Object>)baseManager.getMethod("getAssetTable").invoke(manager);
+        table.put("ps-test-cached-node.xml",cached);
+        try {
+            Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimationSet").getMethod("Reset").invoke(null);
+            if(baseManager.getMethod("load",pathType).invoke(manager,path)!=cached)
+                throw new AssertionError("Review changed native node cache semantics");
+        } finally {table.remove("ps-test-cached-node.xml");}
+        System.out.println("PASS native ready node cache survives AnimationSet.Reset and same-path load; live cache content unobserved");
+    }
     private static void verifyTackle(String mod) throws Exception {
         Class<?> nodeType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNode");
         Class<?> vars=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimationVariableSource");
         Class<?> source=Class.forName("zombie.core.skinnedmodel.advancedanimation.IAnimationVariableSource");
-        Path path=Path.of(mod,"media/AnimSets/player/actions/PS_ShoulderTackle.xml");
+        Path path=Path.of(mod,"media/AnimSets/player/actions/PS_PushTackle.xml");
         Object node=nodeType.getMethod("Parse",String.class).invoke(null,path.toString());
         if(node==null || !"Bob_Shove".equals(nodeType.getField("animName").get(node))) throw new AssertionError("Native forward shove clip required");
+        Class<?> stateType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimState");
+        Object state=stateType.getConstructor().newInstance();
+        try(var files=Files.list(Path.of("media/AnimSets/player/actions"))) {
+            for(Path p:files.filter(p->p.toString().endsWith(".xml")).toList()) {
+                Object installed=nodeType.getMethod("Parse",String.class).invoke(null,p.toString());
+                if(installed!=null) stateType.getMethod("addNode",nodeType).invoke(state,installed);
+            }
+        }
+        stateType.getMethod("addNode",nodeType).invoke(state,node);
+        // Reproduce an already-loaded previous owned identity alongside the new
+        // node. Never copy or alter installed game assets for this regression.
+        Path stalePath=Files.createTempFile("ps-stale-tackle-",".xml");
+        Object stale;
+        try {
+            Files.writeString(stalePath,Files.readString(path).replace("PS_PushTackle","PS_ShoulderTackle").replace("Bob_Shove","Bob_IdleToSprint"));
+            stale=nodeType.getMethod("Parse",String.class).invoke(null,stalePath.toString());
+        } finally {Files.deleteIfExists(stalePath);}
+        stateType.getMethod("addNode",nodeType).invoke(state,stale);
+        Object liveValues=vars.getConstructor().newInstance();
+        vars.getMethod("setVariable",String.class,String.class).invoke(liveValues,"PerformingAction","PS_PushTackle");
+        for(boolean moving:new boolean[]{false,true}) {
+            vars.getMethod("setVariable",String.class,boolean.class).invoke(liveValues,"isMoving",moving);
+            List<?> selected=(List<?>)stateType.getMethod("getAnimNodes",source,List.class).invoke(state,liveValues,new ArrayList<>());
+            if(selected.size()!=1 || selected.get(0)!=node) {
+                for(Object chosen:selected) System.out.println("Selected action: "+nodeType.getField("name").get(chosen));
+                throw new AssertionError("Native actions override tackle");
+            }
+        }
         if(nodeType.getField("useDeferredMovement").getBoolean(node) || nodeType.getField("deferredRotationScale").getFloat(node)!=0) throw new AssertionError("Tackle cannot drive root motion/turning");
         if(!((List<?>)nodeType.getField("events").get(node)).isEmpty()) throw new AssertionError("Tackle gesture must not run bump/combat events");
         Object values=vars.getConstructor().newInstance();
-        for(String name:new String[]{"PS_ShoulderTackle","PS_KickGesture","Shove","Stomp","","Eat"}) {
+        for(String name:new String[]{"PS_PushTackle","PS_ShoulderTackle","PS_KickGesture","Shove","Stomp","","Eat"}) {
             vars.getMethod("setVariable",String.class,String.class).invoke(values,"PerformingAction",name);
             boolean selected=(Boolean)nodeType.getMethod("checkConditions",source).invoke(node,values);
-            if(selected!=name.equals("PS_ShoulderTackle")) throw new AssertionError("Tackle action condition leaks");
+            if(selected!=name.equals("PS_PushTackle")) throw new AssertionError("Tackle action condition leaks");
         }
         Set<String> bones=new HashSet<>();
         for(Object weight:(List<?>)nodeType.getField("subStateBoneWeights").get(node)) bones.add((String)weight.getClass().getField("boneName").get(weight));

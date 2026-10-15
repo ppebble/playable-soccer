@@ -324,7 +324,7 @@ M.send(p,'kick',{id=2,dx=1,dy=0,power=.5})
 assert(matchBall.kickSerial==leadSerial,'loose ball retains original kick reach')
 resetTest();M.send(p,'configure',config);advance(.4)
 local shooter=matchBall.match.testZones.shooter
-assert(shooter and shooter.x==7 and shooter.y==0 and shooter.r==.9,'shooter sits three tiles inside goal B')
+assert(shooter and shooter.x==3.5 and shooter.y==-5 and shooter.r==.9,'shooter is deep and wide relative to goal B')
 local function feedShooter(height)
     S.controls={};matchBall.possession=nil;matchBall.captureAfter=nil;matchBall.zoneGrace=nil;matchBall.shooterZoneBlocked=nil
     matchBall.x=shooter.x;matchBall.y=shooter.y;matchBall.h=height or 0;matchBall.vz=0;matchBall.vx=0;matchBall.vy=0
@@ -337,7 +337,8 @@ local receiveX=matchBall.x;local autoSerial=matchBall.kickSerial
 advance(.2)
 assert(matchBall.possession and matchBall.x==receiveX,'receiver visibly holds before shooting')
 advance(.16)
-assert(not matchBall.possession and matchBall.kickSerial==autoSerial+1 and matchBall.vx>0 and matchBall.vy==0 and matchBall.vz==0,'automatic ground shot aims at goal B center')
+assert(not matchBall.possession and matchBall.kickSerial==autoSerial+1 and matchBall.vx>0 and matchBall.vy>0 and matchBall.vz==0,'automatic ground shot aims diagonally at goal B center')
+assert(math.abs(matchBall.vy/matchBall.vx-(0-shooter.y)/(10-shooter.x))<.00001,'shot direction uses goal-center vector')
 assert(matchBall.kicker=='zone:shooter')
 local score=matchBall.match.scoreA
 for i=1,100 do advance(.02);if matchBall.match.phase=='goal' then break end end
@@ -374,8 +375,26 @@ assert(matchBall.kickSerial==autoSerial,'stolen receiver never fires old timer')
 resetTest();M.wall=function(a,b) return (a.x<8 and b.x>=8) or (b.x<8 and a.x>=8) end
 M.send(p,'configure',config)
 assert(not matchBall.match.testZones.shooter and matchBall.match.testZones.keeper and matchBall.match.testZones.tackle,'blocked shot path omits only receiver zone')
-M.wall=nil;M.missing=function(x,y) return x==7 and y==0 end
+M.wall=nil;M.missing=function(x,y) return x==3 and (y==-5 or y==5) end
 M.send(p,'configure',config)
 assert(not matchBall.match.testZones.shooter,'unloaded receiver placement omitted')
 M.missing=nil
 print('PASS automatic receiver hold, goal shot, grace, stealing, reset and blocked paths')
+M.missing=function(x,y) return x==3 and y==-5 end
+M.send(p,'configure',config)
+assert(matchBall.match.testZones.shooter.y==5,'blocked first flank tries opposite flank')
+M.missing=nil
+local shifted={id=2,goalA=config.goalA,goalB=config.goalB,center={x=5,y=-1}}
+M.send(p,'configure',shifted)
+assert(matchBall.match.testZones.shooter.y==5,'overlap with tackle circle uses opposite flank')
+local rotated={id=2,goalA={ax=-2,ay=0,bx=2,by=0},goalB={ax=-2,ay=10,bx=2,by=10},center={x=0,y=5}}
+p.x=0;p.y=5
+M.send(p,'configure',rotated)
+local rotatedZone=matchBall.match.testZones.shooter
+assert(rotatedZone and rotatedZone.x==5 and rotatedZone.y==3.5,'flank placement rotates with goal normals')
+local longPitch={id=2,goalA={ax=0,ay=-2,bx=0,by=2},goalB={ax=20,ay=-2,bx=20,by=2},center={x=10,y=0}}
+p.x=10;p.y=0
+M.send(p,'configure',longPitch)
+local far=matchBall.match.testZones.shooter
+assert(far and far.x==12 and math.abs(far.y)==5,'large pitch uses eight-tile inward cap and five-tile flank')
+assert(math.abs(math.sqrt((far.x-20)^2+far.y^2)-math.sqrt(89))<.00001,'large-pitch shooter is about9.4tiles from goal')

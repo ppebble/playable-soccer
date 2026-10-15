@@ -53,6 +53,13 @@ end
 -- stay on the server. Never call Hit, falling damage, or drop equipment here.
 
 local M=PSMotion
+M.tackleDiagnosticCount=0
+print('[PlayableSoccer motion v0.5.7] intended PS_PushTackle / Bob_Shove')
+local function tackleDiagnostic(id,phase,p,reason)
+    if not id or id>5 then return end
+    local ok,value=pcall(function() return p and p:getVariableString('PerformingAction') end)
+    print('[PlayableSoccer tackle '..id..'] '..phase..' action='..tostring(ok and value or 'unavailable')..' reason='..tostring(reason or '-'))
+end
 M.fallVisuals={}
 function M.clearFall(p)
     if M.fallVisuals[p] then p:clearVariable('PS_SoccerFall');M.fallVisuals[p]=nil end
@@ -117,18 +124,31 @@ function PS_TackleAction:isValid()
         and (not PSClient.blocked or not PSClient.blocked())
 end
 function PS_TackleAction:start()
-    if not self:isValid() then self:forceStop();return end
+    if not self:isValid() then tackleDiagnostic(self.diagnosticId,'start-refused',self.character,'state');self:forceStop();return end
     local ok=pcall(function()
         self.action:setUseProgressBar(false)
         self.action:setBlockMovementEtc(false)
         -- A single facing request; ordinary locomotion keeps control thereafter.
         self.character:faceLocation(self.character:getX()+self.dx,self.character:getY()+self.dy)
-        self:setActionAnim('PS_ShoulderTackle')
+        self:setActionAnim('PS_PushTackle')
     end)
+    tackleDiagnostic(self.diagnosticId,'start',self.character,not ok and 'unavailable' or nil)
     if not ok then self:forceStop() end
 end
 function PS_TackleAction:update()
+    if not self.diagnosticUpdated then
+        self.diagnosticUpdated=true
+        tackleDiagnostic(self.diagnosticId,'update',self.character)
+    end
     if not self:isValid() then self:forceStop() end
+end
+function PS_TackleAction:stop()
+    tackleDiagnostic(self.diagnosticId,'stop',self.character)
+    ISBaseTimedAction.stop(self)
+end
+function PS_TackleAction:perform()
+    tackleDiagnostic(self.diagnosticId,'perform',self.character)
+    ISBaseTimedAction.perform(self)
 end
 function PS_TackleAction:animEvent(event,parameter) end
 function PS_TackleAction:adjustMaxTime(time) return time end
@@ -142,6 +162,8 @@ function PS_TackleAction:new(p,dx,dy)
     return o
 end
 function M.tackle(p,dx,dy)
+    M.tackleDiagnosticCount=M.tackleDiagnosticCount+1
+    local diagnosticId=M.tackleDiagnosticCount
     local ok,played,reason=pcall(function()
         if not p or not p:isLocalPlayer() then return false,'player' end
         if type(dx)~='number' or type(dy)~='number' or dx~=dx or dy~=dy
@@ -149,12 +171,15 @@ function M.tackle(p,dx,dy)
         local length=math.sqrt(dx*dx+dy*dy)
         if length<.00001 then return false,'direction' end
         local action=PS_TackleAction:new(p,dx/length,dy/length)
+        action.diagnosticId=diagnosticId
         if not action:isValid() then return false,'state' end
         local queue=ISTimedActionQueue.getTimedActionQueue(p)
         if not queue or not queue.queue or #queue.queue>0 then return false,'busy' end
         ISTimedActionQueue.add(action)
         return true
     end)
+    if not ok then reason='unavailable' end
+    tackleDiagnostic(diagnosticId,ok and played and 'queued' or 'refused',p,reason)
     if not ok then return false,'unavailable' end
     return played,reason
 end

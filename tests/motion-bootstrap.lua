@@ -1,4 +1,6 @@
 function require() end
+MOTION_LOGS={}
+function print(message) MOTION_LOGS[#MOTION_LOGS+1]=tostring(message) end
 TEST={queue={queue={}},localPlayer=true}
 TEST.player={isLocalPlayer=function() return TEST.localPlayer end,isDead=function() return TEST.dead end,getVehicle=function() return TEST.vehicle end,isMoving=function() return TEST.moving end}
 ISBaseTimedAction={}
@@ -26,3 +28,4 @@ motionPlayer.faceLocation=function(self,x,y) MOTION.facing={x=x,y=y} end
 function getTimestampMs() return MOTION.time or 1000 end
 motionPlayer.setVariable=function(self,key,value) MOTION[key]=value end
 motionPlayer.clearVariable=function(self,key) MOTION[key]=nil end
+motionPlayer.getVariableString=function(self,key) return TEST.anim end

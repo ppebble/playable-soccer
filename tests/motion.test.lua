@@ -52,10 +52,10 @@ assert(getmetatable(tackle).__index==PS_TackleAction)
 assert(tackle.ballId==7 and tackle.maxTime==18 and tackle:adjustMaxTime(18)==18)
 assert(not tackle.stopOnWalk and not tackle.stopOnRun and not tackle.stopOnAim)
 tackle.action=TEST.native;tackle:start()
-assert(TEST.anim=='PS_ShoulderTackle' and TEST.block==false and TEST.bar==false)
+assert(TEST.anim=='PS_PushTackle' and TEST.block==false and TEST.bar==false)
 assert(math.abs(MOTION.facing.x-10.6)<.00001 and math.abs(MOTION.facing.y-20.8)<.00001)
 assert(MOTION.moving and MOTION.running) -- never stop or teleport the player
-assert(tackle.stop==ISBaseTimedAction.stop and tackle.perform==ISBaseTimedAction.perform and tackle.complete==nil)
+assert(tackle.complete==nil) -- Diagnostic wrappers delegate native cleanup below.
 tackle:animEvent('AttackCollisionCheck','Shove')
 tackle:update();assert(not TEST.stopped)
 assert(not PSMotion.tackle(motionPlayer,1,0)) -- preserve existing queued action
@@ -111,3 +111,13 @@ PSMotion.resetFalls();assert(not MOTION.PS_SoccerFall)
 MOTION={state='idle',localPlayer=true,time=1000};assert(PSMotion.fall(motionPlayer))
 MOTION.dead=true;PSMotion.updateFall(motionPlayer);assert(not MOTION.PS_SoccerFall)
 print('PASS isolated soccer-fall selection lifecycle and recovery cleanup')
+MOTION={state='idle',localPlayer=true};PSClient.selected=11;PSClient.blocked=function() return false end
+TEST.queue.queue={};TEST.error=nil;PSMotion.tackleDiagnosticCount=0;MOTION_LOGS={}
+assert(PSMotion.tackle(motionPlayer,1,0))
+local diagnosticAction=TEST.queue.queue[1];diagnosticAction.action=TEST.native
+diagnosticAction:start();diagnosticAction:update();diagnosticAction:update();diagnosticAction:perform()
+assert(#MOTION_LOGS==4 and string.find(MOTION_LOGS[1],'queued') and string.find(MOTION_LOGS[2],'start')
+    and string.find(MOTION_LOGS[3],'update action=PS_PushTackle') and string.find(MOTION_LOGS[4],'perform'))
+assert(string.find(MOTION_LOGS[1],'reason=-') and string.find(MOTION_LOGS[2],'reason=-'))
+for i=2,6 do assert(not PSMotion.tackle(motionPlayer,0,0)) end
+assert(#MOTION_LOGS==8) -- only first five attempts logged; no frame spam.
