@@ -47,7 +47,7 @@ PSHUD={render=function() TEST.hudRendered=true end}
 PSMotion={play=function(p,lob,dx,dy,power) TEST.motions=(TEST.motions or 0)+1;TEST.motionLob=lob;TEST.motionPower=power end}
 PSMotion.fall=function(p) assert(p==TEST.player);TEST.falls=(TEST.falls or 0)+1 end
 PSMotion.isDown=function(p) return TEST.down or TEST.onFloor end
-PSMotion.tackleMilliseconds=1367
+PSMotion.tackleMilliseconds=667
 PSMotion.tackle=function(p,dx,dy)
     assert(p==TEST.player);TEST.tackles=(TEST.tackles or 0)+1;TEST.tackleDx=dx;TEST.tackleDy=dy
     return not TEST.noTackleMotion
@@ -71,7 +71,14 @@ ISTimedActionQueue={getTimedActionQueue=function() return {queue=TEST.queue or {
 UIManager={getUI=function() return {size=function() return #TEST.uis end,get=function(self,i) return TEST.uis[i+1] end} end}
 UIManager.setRightDownObject=function(v) TEST.rightObject=v end
 TEST.square={isCanSee=function() return true end}
-function getCell() return {getDrag=function() return TEST.drag end,getGridSquare=function() return TEST.square end} end
+TEST.square.TreatAsSolidFloor=function() return not TEST.hole end
+TEST.square.isSolid=function() return TEST.solid or false end
+TEST.square.isSolidTrans=function() return false end
+TEST.square.isBlockedTo=function() return TEST.wall or false end
+function getCell() return {getDrag=function() return TEST.drag end,getGridSquare=function(self,x,y,z)
+    if TEST.grid then return TEST.grid(x,y,z) end
+    return TEST.square
+end} end
 function instanceItem(t) return {type=t,setWorldXRotation=function() end,setWorldYRotation=function() end,setWorldZRotation=function() end} end
 ColorInfo={new=function() return {} end}
 IsoSprite={new=function() return {empty=true} end}

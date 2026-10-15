@@ -275,6 +275,7 @@ for _,speed in ipairs({4,8,12}) do
         S.command(p,'control',{id=2,active=true})
         p.x=p.x+speed/60;advance(1/60)
         assert(matchBall.possession and matchBall.possession.key==ownerKey,'sustained sprint retains holder')
+        assert(matchBall.possession.holderX==p.x and matchBall.possession.holderY==p.y,'authoritative holder anchor matches same tick at sprint speed')
         if i>15 then assert(math.abs(matchBall.x-(p.x+PSCore.possessionLead(speed)))<.01,'ball stays at forward offset at sprint speed') end
     end
 end
@@ -303,6 +304,27 @@ local beforeTeleport=matchBall.x;p.x=p.x+20;advance(.01)
 assert(not matchBall.possession and matchBall.x==beforeTeleport,'large teleport cannot drag the ball')
 matchBall.match=originalMatch
 print('PASS sustained sprint, batched updates, sharp turn, corrections, lag expiry and teleport boundaries')
+matchBall.match=originalMatch;beginFollowTest()
+assert(matchBall.possession.holderX==p.x and matchBall.possession.holderY==p.y,'newly acquired holder has immediate anchor')
+for i=1,30 do advance(1/60) end
+p.faceX=-1;p.x=p.x-.2
+local priorFollowX=matchBall.x
+advance(1/60)
+assert(math.abs(matchBall.x-priorFollowX)<=32/60+.00001,'tightened turn still obeys movement bound')
+for i=1,4 do advance(1/60) end
+assert(math.abs(matchBall.x-(p.x-PSCore.possessionLead(S.motion[ownerKey].speed)))<.01,'sharp turn reaches existing forward lead within five frames')
+M.send(p,'sync',{})
+local anchored
+for _,packetBall in ipairs(M.packets[#M.packets].args.balls) do if packetBall.id==2 then anchored=packetBall.possession end end
+assert(anchored and anchored.holderX==p.x,'published packet includes authoritative anchor')
+anchored.holderX=999
+assert(matchBall.possession.holderX==p.x,'SP anchor copy cannot mutate server possession')
+matchBall.x=5.2;p.x=4.8;p.faceX=1;S.motion={}
+M.wall=function(a,b) return a.x~=b.x end
+advance(.05)
+assert(matchBall.possession and matchBall.possession.holderX==p.x and matchBall.x==5.2,'blocked grace keeps fresh anchor without moving ball through wall')
+advance(.26);assert(not matchBall.possession,'persistent obstruction still releases with tighter follow')
+M.wall=nil;matchBall.match=originalMatch
 
 M.send(p,'reset',{id=2});p.x=matchBall.x;p.y=matchBall.y
 M.send(p,'kick',{id=2,dx=1,dy=0,power=.9,lob=false})

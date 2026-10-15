@@ -128,6 +128,35 @@ function C.receive(command,args)
     PSSetup.receive(command,args)
     if setupId then PSSetup.begin(setupId) end
 end
+-- Render-only local holder compensation. The server still owns contacts/goals.
+local function clearVisualPath(z,fx,fy,tx,ty)
+    local cell=getCell()
+    local function square(x,y) return cell:getGridSquare(math.floor(x),math.floor(y),z) end
+    local function clear(s) return s and s:TreatAsSolidFloor() and not s:isSolid() and not s:isSolidTrans() end
+    local function edge(a,b) return a~=b and (a:isBlockedTo(b) or b:isBlockedTo(a)) end
+    local steps=math.max(1,math.ceil(math.max(math.abs(tx-fx),math.abs(ty-fy))/.08))
+    local px,py=fx,fy
+    for i=1,steps do
+        local nx,ny=fx+(tx-fx)*i/steps,fy+(ty-fy)*i/steps
+        local a,x,y,b=square(px,py),square(nx,py),square(px,ny),square(nx,ny)
+        if not clear(a) or not clear(x) or not clear(y) or not clear(b)
+            or edge(a,x) or edge(a,y) or edge(x,b) or edge(y,b) then return false end
+        px,py=nx,ny
+    end
+    return true
+end
+local function localHeldPosition(b,s,t)
+    local held=b.possession;local p=player()
+    if not p or C.selected~=b.id or C.controlId~=b.id or not held or held.kind~='player'
+        or held.key~=owner(p) or not PSCore.finite(held.holderX) or not PSCore.finite(held.holderY)
+        or t-s.at>250 or p:getZ()~=b.z or b.h~=0 or p:isDead() or p:getVehicle()
+        or PSMotion.isDown(p) or (b.match and b.match.phase~='play') then return end
+    local px,py=p:getX(),p:getY()
+    local dx,dy=px-held.holderX,py-held.holderY
+    if dx*dx+dy*dy>4 then return end
+    local x,y=b.x+dx,b.y+dy
+    if clearVisualPath(b.z,b.x,b.y,x,y) and clearVisualPath(b.z,px,py,x,y) then return x,y end
+end
 function C.positions()
     local out={};local t=now()
     for id,s in pairs(C.samples) do
@@ -136,7 +165,8 @@ function C.positions()
         local phaseA=a.match and a.match.phase
         local phaseB=b.match and b.match.phase
         if phaseB=='goal' or phaseA~=phaseB or a.z~=b.z or (a.x-b.x)^2+(a.y-b.y)^2>16 then f=1 end
-        out[#out+1]={id=id,x=a.x+(b.x-a.x)*f,y=a.y+(b.y-a.y)*f,z=b.z,h=a.h+(b.h-a.h)*f}
+        local x,y=localHeldPosition(b,s,t)
+        out[#out+1]={id=id,x=x or a.x+(b.x-a.x)*f,y=y or a.y+(b.y-a.y)*f,z=b.z,h=a.h+(b.h-a.h)*f}
     end
     return out
 end

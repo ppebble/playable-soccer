@@ -45,14 +45,14 @@ print("PASS local native knockdown request and competing-state guards; animation
 TEST.error=nil;TEST.stopped=false;TEST.queue.queue={}
 PSClient={selected=7,blocked=function() return MOTION.menu end}
 MOTION={state='movement',localPlayer=true,running=true,moving=true}
-assert(PSMotion.tackleMilliseconds==1367)
+assert(PSMotion.tackleMilliseconds==667)
 assert(PSMotion.tackle(motionPlayer,3,4))
 local tackle=TEST.queue.queue[1]
 assert(getmetatable(tackle).__index==PS_TackleAction)
-assert(tackle.ballId==7 and tackle.maxTime==41 and tackle:adjustMaxTime(41)==41)
+assert(tackle.ballId==7 and tackle.maxTime==20 and tackle:adjustMaxTime(20)==20)
 assert(not tackle.stopOnWalk and not tackle.stopOnRun and not tackle.stopOnAim)
 tackle.action=TEST.native;tackle:start()
-assert(TEST.anim=='PS_DefendTackle' and TEST.block==false and TEST.bar==false)
+assert(TEST.anim=='PS_PowerTackle' and TEST.block==false and TEST.bar==false)
 assert(math.abs(MOTION.facing.x-10.6)<.00001 and math.abs(MOTION.facing.y-20.8)<.00001)
 assert(MOTION.moving and MOTION.running) -- never stop or teleport the player
 assert(tackle.complete==nil) -- Diagnostic wrappers delegate native cleanup below.
@@ -117,7 +117,7 @@ assert(PSMotion.tackle(motionPlayer,1,0))
 local diagnosticAction=TEST.queue.queue[1];diagnosticAction.action=TEST.native
 diagnosticAction:start();diagnosticAction:update();diagnosticAction:update();diagnosticAction:perform()
 assert(#MOTION_LOGS==4 and string.find(MOTION_LOGS[1],'queued') and string.find(MOTION_LOGS[2],'start')
-    and string.find(MOTION_LOGS[3],'update action=PS_DefendTackle') and string.find(MOTION_LOGS[4],'perform'))
+    and string.find(MOTION_LOGS[3],'update action=PS_PowerTackle') and string.find(MOTION_LOGS[4],'perform'))
 assert(string.find(MOTION_LOGS[1],'reason=-') and string.find(MOTION_LOGS[2],'reason=-'))
 for i=2,6 do assert(not PSMotion.tackle(motionPlayer,0,0)) end
 assert(#MOTION_LOGS==8) -- only first five attempts logged; no frame spam.

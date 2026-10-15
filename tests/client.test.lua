@@ -204,8 +204,8 @@ TEST.buttons={};TEST.queue={};local attempts=TEST.tackles or 0
 C.tackle()
 assert(TEST.tackles==attempts+1 and TEST.sent[#TEST.sent].command=='tackle','attempt animates before server success is known')
 assert(TEST.tackleDx==1 and TEST.tackleDy==0,'gesture receives cursor direction')
-local beforeRepeat=#TEST.sent;TEST.time=60801;C.tackle()
-assert(#TEST.sent==beforeRepeat and TEST.tackles==attempts+1,'active defense gesture blocks repeated invisible tackle after minimum cooldown')
+local beforeRepeat=#TEST.sent;TEST.time=60000+PSMotion.tackleMilliseconds-1;C.tackle()
+assert(#TEST.sent==beforeRepeat and TEST.tackles==attempts+1,'active power gesture blocks repeated tackle')
 TEST.time=60000
 C.mouseDown();assert(not C.charge,'cannot charge kick during shoulder gesture')
 TEST.queue={setmetatable({},PS_TackleAction)};C.update(TEST.player)
@@ -241,3 +241,33 @@ for index,speed in ipairs({4,8,12}) do
     TEST.time=TEST.time+50
     assert(C.positions()[1].x>10+speed*.15,'interpolated carried ball stays ahead of moving holder')
 end
+
+-- Fresh local possession uses the current holder position, not delayed world interpolation.
+TEST.x=10;TEST.y=1;C.selected=1;C.controlId=1;C.samples={};TEST.time=100000
+local localHeld=state(200,11.8)
+localHeld.balls[1].possession={kind='player',key='test',holderX=10,holderY=1}
+localHeld.balls[1].match={phase='play'}
+C.receive('state',localHeld)
+TEST.x=11.2;TEST.time=100100
+assert(math.abs(C.positions()[1].x-13)<.00001,'local sprint holds exact forward offset without packet lag')
+assert(localHeld.balls[1].x==11.8 and localHeld.balls[1].possession.holderX==10,'visual correction never mutates server state')
+TEST.hole=true;assert(C.positions()[1].x==11.8,'unsupported floor disables prediction');TEST.hole=nil
+TEST.solid=true;assert(C.positions()[1].x==11.8,'solid tile disables prediction');TEST.solid=nil
+local squares={}
+TEST.grid=function(x,y,z)
+    local key=x..':'..y
+    if not squares[key] then
+        squares[key]=setmetatable({isBlockedTo=function(self,other) return self~=other end},{__index=TEST.square})
+    end
+    return squares[key]
+end
+assert(C.positions()[1].x==11.8,'wall edge disables local compensation')
+TEST.grid=function() return nil end
+assert(C.positions()[1].x==11.8,'unloaded square disables local compensation');TEST.grid=nil
+TEST.x=13;assert(C.positions()[1].x==11.8,'teleport does not extrapolate ball')
+TEST.x=11.2;TEST.time=100251;assert(C.positions()[1].x==11.8,'stale snapshot disables correction')
+TEST.time=100100;localHeld.balls[1].z=1;assert(C.positions()[1].x==11.8,'different floor disables correction');localHeld.balls[1].z=0
+localHeld.balls[1].possession.key='remote';assert(C.positions()[1].x==11.8,'remote holder remains authoritative')
+localHeld.balls[1].possession=nil;assert(C.positions()[1].x==11.8,'released ball never follows local player')
+TEST.x=nil;TEST.y=nil;C.leave()
+print('PASS bounded local holder compensation, unchanged authority, walls, floor, stale packets and release')

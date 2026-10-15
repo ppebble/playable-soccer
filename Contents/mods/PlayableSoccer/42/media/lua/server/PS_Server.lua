@@ -158,7 +158,7 @@ local function acquire(p,b,t)
     for _,other in pairs(S.balls) do
         if other~=b and other.possession and other.possession.kind=='player' and other.possession.key==key then return false end
     end
-    b.possession={kind='player',key=key}; b.h=0; b.vx=0; b.vy=0; b.vz=0
+    b.possession={kind='player',key=key,holderX=p:getX(),holderY=p:getY()}; b.h=0; b.vx=0; b.vy=0; b.vz=0
     return true
 end
 local function knockDown(p,b,t)
@@ -310,6 +310,9 @@ local function possessionTick(b,dt,t,all)
         -- but never pull a ball across a teleport or an indefinitely growing gap.
         if separation>36 then release(b,t);return true end
         local possession=b.possession
+        -- Anchor belongs to the same server sample as the ball. Local display
+        -- may compensate recent holder movement without changing authority.
+        possession.holderX=holder:getX();possession.holderY=holder:getY()
         if separation>4 then
             possession.lagSince=possession.lagSince or t
             if t-possession.lagSince>.75 then release(b,t);return true end
@@ -339,7 +342,7 @@ local function possessionTick(b,dt,t,all)
         end
         possession.blockedSince=nil
         local mx,my=tx-b.x,ty-b.y;local distance=math.sqrt(mx*mx+my*my)
-        local speed=math.min(32,math.max(16,(motion and motion.speed or 0)+8,distance*10))
+        local speed=math.min(32,math.max(24,(motion and motion.speed or 0)+12,distance*24))
         local fraction=distance>0 and math.min(1,speed*math.min(dt,.1)/distance) or 0
         local x,y=b.x,b.y;b.x=x+mx*fraction;b.y=y+my*fraction
         b.h=0;b.vx=0;b.vy=0;b.vz=0

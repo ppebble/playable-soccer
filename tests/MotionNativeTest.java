@@ -6,6 +6,7 @@ public final class MotionNativeTest {
     public static void main(String[] args) throws Exception {
         verifyFall();
         verifySoccerFall(args[0]);
+        verifyPowerClip(args[0]);
         verifyNodeCache();
         verifyTackle(args[0]);
         verifyStrongKick(args[0]);
@@ -90,7 +91,7 @@ public final class MotionNativeTest {
         if(nodeType.getField("useDeferredMovement").getBoolean(node) || nodeType.getField("deferredRotationScale").getFloat(node)!=0) throw new AssertionError("Strong kick cannot drive root motion");
         if(!((List<?>)nodeType.getField("events").get(node)).isEmpty()) throw new AssertionError("Strong kick must not trigger combat");
         Object values=vars.getConstructor().newInstance();
-        for(String name:new String[]{"PS_StrongKickGesture","PS_KickGesture","PS_DefendTackle","Stomp","","Eat"}) {
+        for(String name:new String[]{"PS_StrongKickGesture","PS_KickGesture","PS_PowerTackle","Stomp","","Eat"}) {
             vars.getMethod("setVariable",String.class,String.class).invoke(values,"PerformingAction",name);
             boolean selected=(Boolean)nodeType.getMethod("checkConditions",source).invoke(node,values);
             if(selected!=name.equals("PS_StrongKickGesture")) throw new AssertionError("Strong kick action condition leaks");
@@ -108,6 +109,67 @@ public final class MotionNativeTest {
         double blend=((Number)nodeType.getMethod("getBlendOutTime").invoke(node)).doubleValue();
         if(last/Double.parseDouble(rate.group(1))/speed+blend>32.0/30) throw new AssertionError("Strong kick timeout truncates clip");
         System.out.println("PASS strong kick native variant, body mask, no combat/root motion and duration; appearance untested");
+    }
+    private static void verifyPowerClip(String mod) throws Exception {
+        Class<?> loader=Class.forName("zombie.core.skinnedmodel.model.ModelLoader");
+        Class<?> skin=Class.forName("zombie.core.skinnedmodel.model.SkinningData");
+        var load=loader.getDeclaredMethod("loadTxt",String.class,boolean.class,boolean.class,skin);load.setAccessible(true);
+        Object parsed=load.invoke(loader.getField("instance").get(null),Path.of(mod,"media/anims/ps_powertackle.txt").toString(),false,false,null);
+        var clips=parsed.getClass().getDeclaredField("clips");clips.setAccessible(true);
+        Object clip=((Map<?,?>)clips.get(parsed)).get("PS_PowerTackle");
+        if(clip==null) throw new AssertionError("Authored clip not loaded");
+        Class<?> fs=Class.forName("zombie.ZomboidFileSystem");Object filesystem=fs.getField("instance").get(null);
+        String discovered=(String)fs.getMethod("getAnimName",java.net.URI.class,java.io.File.class).invoke(filesystem,
+            java.net.URI.create(Path.of(mod,"media").toUri().toString().toLowerCase(Locale.ROOT)),Path.of(mod,"media/anims_X/PS_PowerTackle.txt").toFile());
+        if(!discovered.equals("ps_powertackle")) throw new AssertionError("Native discovery name "+discovered);
+        Path common=Path.of(mod).getParent().resolve("common/media/anims_X/PS_PowerTackle.txt");
+        if(!Files.isRegularFile(common)) throw new AssertionError("B42 common directory scan must precede version animation discovery");
+        String commonName=(String)fs.getMethod("getAnimName",java.net.URI.class,java.io.File.class).invoke(filesystem,
+            java.net.URI.create(common.getParent().toUri().toString().toLowerCase(Locale.ROOT)),common.toFile());
+        if(!commonName.equals(discovered)) throw new AssertionError("Common/version markers must request one cached asset key");
+        Class<?> ap=Class.forName("zombie.asset.AssetPath"),am=Class.forName("zombie.asset.AssetManager");
+        HashMap<String,Integer> targetBones=new HashMap<>();
+        ((Map<String,Integer>)field(parsed,"boneIndices")).forEach((name,index)->targetBones.put(name,index+1));
+        targetBones.put("PS_TestExtraRoot",0);
+        ArrayList<Integer> targetParents=new ArrayList<>();targetParents.add(-1);
+        for(Integer parent:(List<Integer>)field(parsed,"skeletonHierarchy"))targetParents.add(parent+1);
+        Object skinData=skin.getConstructor(HashMap.class,List.class,List.class,List.class,List.class,HashMap.class).newInstance(
+            new HashMap<>(),prepend(field(parsed,"bindPose")),prepend(field(parsed,"invBindPose")),prepend(field(parsed,"skinOffsetMatrices")),targetParents,targetBones);
+        Class<?> meshType=Class.forName("zombie.core.skinnedmodel.model.ModelMesh"),mp=Class.forName("zombie.core.skinnedmodel.model.ModelMesh$MeshAssetParams");
+        Object mesh=meshType.getConstructor(ap,am,mp).newInstance(ap.getConstructor(String.class).newInstance("ps-test-rig"),null,mp.getConstructor().newInstance());
+        meshType.getField("skinningData").set(mesh,skinData);
+        Class<?> assetType=Class.forName("zombie.core.skinnedmodel.model.AnimationAsset"),paramsType=Class.forName("zombie.core.skinnedmodel.model.AnimationAsset$AnimationAssetParams");
+        Object params=paramsType.getConstructor().newInstance();paramsType.getField("animationsMesh").set(params,mesh);
+        Object asset=assetType.getConstructor(ap,am,paramsType).newInstance(ap.getConstructor(String.class).newInstance(discovered),null,params);
+        Map<String,String> active=(Map<String,String>)fs.getField("activeFileMap").get(filesystem);
+        String logical="media/anims/ps_powertackle.txt";
+        active.put(logical,Path.of(mod,logical).toString());
+        try {
+            Class<?> taskType=Class.forName("zombie.core.skinnedmodel.model.FileTask_LoadAnimation");
+            Object task=taskType.getConstructor(assetType,Class.forName("zombie.fileSystem.FileSystem"),Class.forName("zombie.fileSystem.IFileTaskCallback")).newInstance(asset,null,null);
+            Object loaded=taskType.getMethod("call").invoke(task);
+            var apply=assetType.getDeclaredMethod("onLoadedTxt",parsed.getClass());apply.setAccessible(true);apply.invoke(asset,loaded);
+            Object registered=((Map<?,?>)skin.getField("animationClips").get(skinData)).get("PS_PowerTackle");
+            if(registered==null) throw new AssertionError("Exact-case clip registration missing");
+            for(Object key:(Object[])registered.getClass().getMethod("getKeyframes").invoke(registered)) {
+                String name=(String)key.getClass().getField("boneName").get(key);
+                if(key.getClass().getField("bone").getInt(key)!=targetBones.get(name)) throw new AssertionError("Native named-bone remapping failed: "+name);
+            }
+        } finally {active.remove(logical);}
+        float duration=(float)clip.getClass().getMethod("getDuration").invoke(clip);
+        Object[] frames=(Object[])clip.getClass().getMethod("getKeyframes").invoke(clip);
+        if(Math.abs(duration-.56)>1e-5 || frames.length!=72) throw new AssertionError("Authored clip duration/keys");
+        for(Object frame:frames) {
+            String bone=(String)frame.getClass().getField("boneName").get(frame);
+            if(bone.equals("Bip01") || bone.contains("Pelvis") || bone.contains("Thigh")) throw new AssertionError("Root/leg motion forbidden");
+        }
+        System.out.println("PASS native ModelLoader loads original PowerTackle:72 keys/.56sec; rendering untested");
+    }
+    private static Object field(Object object,String name) throws Exception {
+        var f=object.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(object);
+    }
+    private static List<Object> prepend(Object source) {
+        List<?> original=(List<?>)source;List<Object> result=new ArrayList<>();result.add(original.get(0));result.addAll(original);return result;
     }
     private static void verifyNodeCache() throws Exception {
         Class<?> managerType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNodeAssetManager");
@@ -133,12 +195,9 @@ public final class MotionNativeTest {
         Class<?> nodeType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNode");
         Class<?> vars=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimationVariableSource");
         Class<?> source=Class.forName("zombie.core.skinnedmodel.advancedanimation.IAnimationVariableSource");
-        Path path=Path.of(mod,"media/AnimSets/player/actions/PS_DefendTackle.xml");
+        Path path=Path.of(mod,"media/AnimSets/player/actions/PS_PowerTackle.xml");
         Object node=nodeType.getMethod("Parse",String.class).invoke(null,path.toString());
-        if(node==null || !"Bob_BiteDefend".equals(nodeType.getField("animName").get(node))) throw new AssertionError("Native unarmed bite-defense clip required");
-        String nativeDefense=Files.readString(Path.of("media/AnimSets/player/hitreaction-bite/BiteDefended.xml"));
-        if(!nativeDefense.contains("<m_AnimName>Bob_BiteDefend</m_AnimName>") || !nativeDefense.contains("<m_Value>BiteDefended</m_Value>"))
-            throw new AssertionError("Installed automatic bite defense changed");
+        if(node==null || !"PS_PowerTackle".equals(nodeType.getField("animName").get(node))) throw new AssertionError("Original PowerTackle clip required");
         Class<?> stateType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimState");
         Object state=stateType.getConstructor().newInstance();
         try(var files=Files.list(Path.of("media/AnimSets/player/actions"))) {
@@ -153,12 +212,12 @@ public final class MotionNativeTest {
         Path stalePath=Files.createTempFile("ps-stale-tackle-",".xml");
         Object stale;
         try {
-            Files.writeString(stalePath,Files.readString(path).replace("PS_DefendTackle","PS_PushTackle").replace("Bob_BiteDefend","Bob_Shove"));
+            Files.writeString(stalePath,Files.readString(path).replace("PS_PowerTackle","PS_DefendTackle").replace("<m_AnimName>PS_DefendTackle</m_AnimName>","<m_AnimName>Bob_BiteDefend</m_AnimName>"));
             stale=nodeType.getMethod("Parse",String.class).invoke(null,stalePath.toString());
         } finally {Files.deleteIfExists(stalePath);}
         stateType.getMethod("addNode",nodeType).invoke(state,stale);
         Object liveValues=vars.getConstructor().newInstance();
-        vars.getMethod("setVariable",String.class,String.class).invoke(liveValues,"PerformingAction","PS_DefendTackle");
+        vars.getMethod("setVariable",String.class,String.class).invoke(liveValues,"PerformingAction","PS_PowerTackle");
         for(boolean moving:new boolean[]{false,true}) {
             vars.getMethod("setVariable",String.class,boolean.class).invoke(liveValues,"isMoving",moving);
             List<?> selected=(List<?>)stateType.getMethod("getAnimNodes",source,List.class).invoke(state,liveValues,new ArrayList<>());
@@ -170,28 +229,22 @@ public final class MotionNativeTest {
         if(nodeType.getField("useDeferredMovement").getBoolean(node) || nodeType.getField("deferredRotationScale").getFloat(node)!=0) throw new AssertionError("Tackle cannot drive root motion/turning");
         if(!((List<?>)nodeType.getField("events").get(node)).isEmpty()) throw new AssertionError("Tackle gesture must not run bump/combat events");
         Object values=vars.getConstructor().newInstance();
-        for(String name:new String[]{"PS_DefendTackle","PS_PushTackle","PS_ShoulderTackle","PS_KickGesture","Shove","BiteDefended","Stomp","","Eat"}) {
+        for(String name:new String[]{"PS_PowerTackle","PS_PushTackle","PS_ShoulderTackle","PS_KickGesture","Shove","BiteDefended","Stomp","","Eat"}) {
             vars.getMethod("setVariable",String.class,String.class).invoke(values,"PerformingAction",name);
             boolean selected=(Boolean)nodeType.getMethod("checkConditions",source).invoke(node,values);
-            if(selected!=name.equals("PS_DefendTackle")) throw new AssertionError("Tackle action condition leaks");
+            if(selected!=name.equals("PS_PowerTackle")) throw new AssertionError("Tackle action condition leaks");
         }
         Set<String> bones=new HashSet<>();
         for(Object weight:(List<?>)nodeType.getField("subStateBoneWeights").get(node)) bones.add((String)weight.getClass().getField("boneName").get(weight));
         if(!bones.equals(Set.of("Bip01_Spine"))) throw new AssertionError("Tackle must preserve pelvis/root/leg locomotion");
-        String clip=Files.readString(Path.of("media/anims_X/Bob/Bob_BiteDefend.x"));
-        if(!clip.contains("Frame Bip01_Spine")) throw new AssertionError("Native torso bone missing");
-        var rate=java.util.regex.Pattern.compile("AnimTicksPerSecond\\s*\\{\\s*(\\d+);").matcher(clip);
-        if(!rate.find()) throw new AssertionError("Missing bite-defense timing");
-        var times=java.util.regex.Pattern.compile("(?m)^\\s*(\\d+);[34];").matcher(clip);
-        int last=0;while(times.find()) last=Math.max(last,Integer.parseInt(times.group(1)));
         String xml=Files.readString(path);
-        if(!xml.contains("<m_SpeedScale>1.40</m_SpeedScale>") || !xml.contains("<m_BlendOutTime>0.10</m_BlendOutTime>")
+        if(!xml.contains("<m_SpeedScale>1.0</m_SpeedScale>") || !xml.contains("<m_BlendOutTime>0.08</m_BlendOutTime>")
             || !xml.contains("<m_BlendTime>0.08</m_BlendTime>")
-            || last/Double.parseDouble(rate.group(1))/1.40+0.10>41.0/30) throw new AssertionError("Tackle gesture timeout truncates clip");
+            || .56+.08>20.0/30) throw new AssertionError("Tackle gesture timeout truncates clip");
         Class<?> player=Class.forName("zombie.characters.IsoPlayer");
         player.getMethod("faceLocation",float.class,float.class);
         player.getMethod("getX");player.getMethod("getY");
-        System.out.println("PASS native automatic bite-defense clip, torso-only mask, event-free conditions, blends and duration; silhouette untested");
+        System.out.println("PASS original PowerTackle selected exclusively, torso-only mask, no combat events, bounded duration; silhouette untested");
     }
     private static void verifyFall() throws Exception {
         Class<?> player=Class.forName("zombie.characters.IsoPlayer",false,MotionNativeTest.class.getClassLoader());
