@@ -88,7 +88,7 @@ end
 local function mobile(p)
     return not p:isDead() and not p:getVehicle() and C.finite(p:getX()) and C.finite(p:getY()) and integer(p:getZ())
 end
-local cooldown={start=.5,kick=.15,control=0,tackle=.8,stop=.15,sync=.25,configure=.5,reset=.5,team=.5}
+local cooldown={start=.5,kick=.15,control=0,tackle=.8,stop=.15,sync=.25,configure=.5,reset=.5,restart=.5,team=.5}
 local function sampleMotion(p,t)
     local key=owner(p)
     local previous=S.motion[key]
@@ -146,9 +146,12 @@ local function downed(p)
     return (type(state)=='string' and string.find(string.lower(state),'getup',1,true)~=nil)
         or (type(action)=='string' and string.find(string.lower(action),'getup',1,true)~=nil)
 end
+local function allowed(p,b)
+    return not b.match or b.match.mode~='practice' or b.owner==owner(p)
+end
 local function participant(p,b,t)
     local key=owner(p); local control=S.controls[key]
-    return mobile(p) and p:getZ()==b.z and control and control.id==b.id and t-control.at<=3
+    return allowed(p,b) and (not b.match or b.match.phase=='play') and mobile(p) and p:getZ()==b.z and control and control.id==b.id and t-control.at<=3
         and not (S.stunned[key] and S.stunned[key]>t)
         and not downed(p)
 end
@@ -377,7 +380,7 @@ function S.command(p,command,args)
             for _,b in pairs(S.balls) do if b.possession and b.possession.kind=='player' and b.possession.key==key then release(b,t) end end
         elseif args.active==true then
             local b=integer(args.id) and S.balls[args.id]
-            if not b or not mobile(p) or p:getZ()~=b.z or (p:getX()-b.x)^2+(p:getY()-b.y)^2>10000 then return end
+            if not b or not allowed(p,b) or (b.match and b.match.phase=='finished') or not mobile(p) or p:getZ()~=b.z or (p:getX()-b.x)^2+(p:getY()-b.y)^2>10000 then return end
             for _,held in pairs(S.balls) do if held.id~=b.id and held.possession and held.possession.kind=='player' and held.possession.key==key then release(held,t) end end
             S.controls[key]={id=b.id,at=t}
         else return end
@@ -409,35 +412,39 @@ function S.command(p,command,args)
     elseif command=='configure' then
         local b=integer(args.id) and S.balls[args.id]
         if not b or b.owner~=key or p:getZ()~=b.z then return end
-        local function invalid() emit(p,'notice',{key='UI_PS_GoalsInvalid'}) end
-        local match=PSMatch.configure(args.goalA,args.goalB,args.center)
+        local function invalid() emit(p,'notice',{key=args.mode=='practice' and 'UI_PS_PracticeGoalsInvalid' or 'UI_PS_GoalsInvalid'}) end
+        local match=PSMatch.configure(args.goalA,args.goalB,args.center,args.mode)
         if not match then invalid(); return end
-        for _,point in ipairs({match.center,{x=match.goals.A.ax,y=match.goals.A.ay},
-            {x=match.goals.A.bx,y=match.goals.A.by},{x=match.goals.B.ax,y=match.goals.B.ay},
-            {x=match.goals.B.bx,y=match.goals.B.by}}) do
+        local points={match.center}
+        for _,g in pairs(match.goals) do
+            points[#points+1]={x=g.ax,y=g.ay};points[#points+1]={x=g.bx,y=g.by}
+            if not clearGoal(g,b.z) then invalid();return end
+        end
+        for _,point in ipairs(points) do
             if (point.x-p:getX())^2+(point.y-p:getY())^2>1600 then invalid(); return end
         end
-        if not clearPoint(match.center.x,match.center.y,b.z)
-            or not clearGoal(match.goals.A,b.z) or not clearGoal(match.goals.B,b.z) then invalid(); return end
+        if not clearPoint(match.center.x,match.center.y,b.z) then invalid(); return end
         match.teams[key]='A'; b.match=match;b.lastPlayerKicker=nil;b.shooterZoneBlocked=nil;b.passerZoneBlocked=nil;release(b,t); PSMatch.reset(b)
-        match.testZones=zonesFor(match,b)
-        emit(p,'notice',{key='UI_PS_GoalsReady'})
-        if not match.testZones.tackle or not match.testZones.keeper or not match.testZones.shooter or not match.testZones.passer then emit(p,'notice',{key='UI_PS_TestZonesUnavailable'}) end
-    elseif command=='reset' then
+        if match.mode~='practice' then match.testZones=zonesFor(match,b) end
+        emit(p,'notice',{key=match.mode=='practice' and 'UI_PS_PracticeReady' or 'UI_PS_GoalsReady'})
+        if match.testZones and (not match.testZones.tackle or not match.testZones.keeper or not match.testZones.shooter or not match.testZones.passer) then emit(p,'notice',{key='UI_PS_TestZonesUnavailable'}) end
+    elseif command=='reset' or command=='restart' then
         local b=integer(args.id) and S.balls[args.id]
         if not b or b.owner~=key or p:getZ()~=b.z then return end
+        if command=='restart' and (not b.match or b.match.mode=='practice' or b.match.phase~='finished') then return end
         local center=b.match and b.match.center or b.spawn
         if not center or not clearPoint(center.x,center.y,b.z) then return end
         release(b,t)
         b.shooterZoneBlocked=nil
         b.passerZoneBlocked=nil
         b.lastPlayerKicker=nil
-        if b.match then PSMatch.reset(b)
+        if command=='restart' then PSMatch.restart(b)
+        elseif b.match then PSMatch.reset(b)
         else b.x=center.x;b.y=center.y;b.h=0;b.vx=0;b.vy=0;b.vz=0 end
         emit(p,'notice',{key='UI_PS_BallReset'})
     elseif command=='team' then
         local b=integer(args.id) and S.balls[args.id]
-        if not b or not b.match or p:getZ()~=b.z or (args.team~='A' and args.team~='B') then return end
+        if not b or not b.match or b.match.mode=='practice' or b.match.phase=='finished' or p:getZ()~=b.z or (args.team~='A' and args.team~='B') then return end
         if (p:getX()-b.match.center.x)^2+(p:getY()-b.match.center.y)^2>1600 then return end
         local count=0; for _ in pairs(b.match.teams) do count=count+1 end
         if count>=64 and not b.match.teams[key] then return end
@@ -447,12 +454,13 @@ function S.command(p,command,args)
         if not b or (b.match and b.match.phase~='play') or not tackle(p,b,args,t) then return end
     elseif command=='kick' then
         local b=integer(args.id) and S.balls[args.id]
-        if not b or p:getZ()~=b.z or (b.match and b.match.phase~='play') or (S.stunned[key] and t<S.stunned[key]) then return end
+        if not b or not allowed(p,b) or p:getZ()~=b.z or (b.match and b.match.phase~='play') or (S.stunned[key] and t<S.stunned[key]) then return end
         if b.possession and (b.possession.kind~='player' or b.possession.key~=key) then return end
         if downed(p) or (b.possession and not participant(p,b,t)) then return end
         local range=b.possession and C.possessionKickRange or C.kickRange
         if (p:getX()-b.x)^2+(p:getY()-b.y)^2>range^2 or not clearPath(b,p:getX(),p:getY(),b.x,b.y) then return end
         if not C.kick(b,args.dx,args.dy,args.power,args.lob) then return end
+        addXp(p,Perks.Strength,1);addXp(p,Perks.Aiming,1)
         b.possession=nil;b.captureAfter=t+.35;b.shooter=key;b.shooterAfter=t+.6
         local length=math.sqrt(args.dx^2+args.dy^2)
         b.kickSerial=(b.kickSerial or 0)+1;b.kicker=key;b.lastPlayerKicker=key
@@ -476,7 +484,9 @@ function S.tick()
     for key,untilTime in pairs(S.stunned) do if t>=untilTime then S.stunned[key]=nil end end
     local scored=false
     for _,b in pairs(S.balls) do
-        if b.match and b.match.phase=='goal' then
+        if b.match and b.match.phase=='finished' then
+            release(b,t)
+        elseif b.match and b.match.phase=='goal' then
             if b.possession then release(b,t) end
             if t>=b.match.resetAt and clearPoint(b.match.center.x,b.match.center.y,b.z) then release(b,t);b.lastPlayerKicker=nil;b.shooterZoneBlocked=nil;b.passerZoneBlocked=nil;PSMatch.reset(b) end
         else
@@ -485,7 +495,7 @@ function S.tick()
                     if PSMatch.segment(ball,x,y,h,t) then release(ball,t);scored=true; return true end
                     return zoneCapture(ball,t)
                 end)
-            elseif b.match and b.match.phase=='goal' then scored=true end
+            elseif b.match and (b.match.phase=='goal' or b.match.phase=='finished') then scored=true end
         end
     end
     if scored or not S.lastPublish or t-S.lastPublish>=.1 then S.lastPublish=t; publishAll() end

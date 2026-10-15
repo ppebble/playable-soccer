@@ -31,7 +31,7 @@ Keyboard={KEY_ESCAPE=1,KEY_SPACE=57}
 ISObjectClickHandler={}
 PSProjection={available=function() return not TEST.noProjection end,screenToWorld=function(i,x,y,z) if TEST.noProjection then return end;return x,y end}
 PSSetup={active=function() return TEST.setup end,cancel=function() TEST.setup=nil end,click=function() TEST.setupClicked=true end,menu=function() end}
-PSSetup.begin=function(id) assert(PSClient.ball(id),'setup must see installed authoritative state');PSClient.leave();TEST.setup=id end
+PSSetup.begin=function(id,mode) assert(PSClient.ball(id),'setup must see installed authoritative state');PSClient.leave();TEST.setup=id;TEST.setupMode=mode end
 PSSetup.receive=function(command,args) TEST.setupReceived=command end
 PSSetup.update=function() end
 ISContextMenu={get=function()

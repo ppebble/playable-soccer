@@ -21,7 +21,7 @@ end
 
 function PS_BallMenu.start(player, item)
     -- Main inventory requirement is explicit; do not race an asynchronous transfer.
-    if item:getContainer() == player:getInventory() then PSClient.start(player, item) end
+    if item:getContainer() == player:getInventory() then PSClient.start(player, item, "practice") end
 end
 
 function PS_BallMenu.createMatch(player, item)

@@ -7,7 +7,7 @@
   "UI_PS_RenderError": "The soccer ball could not be displayed. Check that 3D ground items are enabled; you can end practice from the right-click menu.",
   "UI_PS_TooManyBalls": "The server has reached the practice ball limit. End an existing practice first.",
   "UI_PS_StartFailed": "Practice did not start. Keep the sports ball in your main inventory and stand on clear ground.",
-  "UI_PS_Practice": "SOCCER FREE PRACTICE",
+  "UI_PS_Practice": "SOCCER SOLO PRACTICE",
   "UI_PS_Goal": "GOAL! Team %1 - restarting at the center",
   "UI_PS_Ground": "GROUND KICK",
   "UI_PS_Lob": "LOB",
@@ -43,5 +43,16 @@
   "UI_PS_ShooterZone": "SHOT ZONE B · send the ball in for an automatic shot",
   "UI_PS_ShooterPossession": "Shot zone has the ball · shooting at goal B",
   "UI_PS_PasserZone": "RETURN PASS · send the ball in for a pass back",
-  "UI_PS_PasserPossession": "Return pass zone has the ball · preparing a pass back"
+  "UI_PS_PasserPossession": "Return pass zone has the ball · preparing a pass back",
+  "UI_PS_PracticeScore": "SOLO PRACTICE · Goals: %1",
+  "UI_PS_PracticePlace1": "Practice goal: click the first post. Your starting position is the ball return point; keep the goal at least 2 tiles away.",
+  "UI_PS_PracticePlace2": "Practice goal: click the second post (2–10 tiles). Right-click/Esc cancels.",
+  "UI_PS_PracticeReady": "Practice started! Continue until you end practice from the Esc menu.",
+  "UI_PS_PracticeGoalsInvalid": "Invalid practice goal: use clear ground, width 2–10 tiles, at least 2 tiles from the starting position; all points must be within 40 tiles.",
+  "UI_PS_PracticeGoal": "GOAL! Returning the ball for the next shot.",
+  "UI_PS_PracticeRule": "Unlimited practice · End from the Esc menu",
+  "UI_PS_FirstToFive": "First to 5 goals wins",
+  "UI_PS_MatchFinished": "Team %1 wins! · Restart from the Esc menu",
+  "UI_PS_RestartMatch": "Play again (reset score)",
+  "UI_PS_ConfigurePracticeGoal": "Soccer: draw one practice goal"
 }

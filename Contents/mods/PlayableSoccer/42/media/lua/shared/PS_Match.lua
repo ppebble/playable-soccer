@@ -1,5 +1,5 @@
 require 'PS_Core'
-PSMatch={radius=.10,goalHeight=.8,pauseSeconds=2}
+PSMatch={radius=.10,goalHeight=.8,pauseSeconds=2,winningScore=5}
 local M,C=PSMatch,PSCore
 local function point(p)
     return type(p)=='table' and C.finite(p.x) and C.finite(p.y)
@@ -18,29 +18,39 @@ local function goal(g,center)
     return r
 end
 -- Coordinate-only contract: camera projection belongs exclusively to the client.
-function M.configure(a,b,center)
+function M.configure(a,b,center,mode)
+    mode=mode or 'match'
+    if mode~='match' and mode~='practice' then return nil end
     if not point(center) then return nil end
     local ga,gb=goal(a,center),goal(b,center)
-    if not ga or not gb then return nil end
+    if not ga or (mode=='match' and not gb) then return nil end
+    if mode=='practice' then gb=nil end
     -- Every opposite post must lie well inside the facing half-plane. This
     -- rejects intersecting/overlapping mouths and center-outside setups.
-    if ga.nx*gb.nx+ga.ny*gb.ny>-.25
+    if mode=='match' and (ga.nx*gb.nx+ga.ny*gb.ny>-.25
         or side(ga,gb.ax,gb.ay)<2 or side(ga,gb.bx,gb.by)<2
-        or side(gb,ga.ax,ga.ay)<2 or side(gb,ga.bx,ga.by)<2 then return nil end
+        or side(gb,ga.ax,ga.ay)<2 or side(gb,ga.bx,ga.by)<2) then return nil end
     for _,g in ipairs({ga,gb}) do
         for _,p in ipairs({{x=g.ax,y=g.ay},{x=g.bx,y=g.by}}) do
             if (p.x-center.x)^2+(p.y-center.y)^2>1600 then return nil end
         end
     end
-    return {goals={A=ga,B=gb},center={x=center.x,y=center.y},scoreA=0,scoreB=0,teams={},crossings={},phase='play'}
+    return {mode=mode,goals={A=ga,B=gb},center={x=center.x,y=center.y},scoreA=0,scoreB=0,teams={},crossings={},phase='play'}
 end
 function M.reset(ball)
     local match=ball.match
     if not match then return false end
     ball.x=match.center.x; ball.y=match.center.y
     ball.h=0; ball.vx=0; ball.vy=0; ball.vz=0
-    match.phase='play'; match.resetAt=nil; match.lastScoringTeam=nil; match.crossings={}
+    if match.phase~='finished' then match.phase='play' end
+    match.resetAt=nil; match.lastScoringTeam=nil; match.crossings={}
     return true
+end
+function M.restart(ball)
+    local match=ball.match
+    if not match or match.mode=='practice' or match.phase~='finished' then return false end
+    match.scoreA=0;match.scoreB=0;match.winner=nil;match.phase='play'
+    return M.reset(ball)
 end
 local function crossed(g,ball,x,y,h,entries,key)
     local from,to=side(g,x,y),side(g,ball.x,ball.y)
@@ -69,10 +79,13 @@ function M.segment(ball,x,y,h,time)
     local match=ball.match
     if not match or match.phase~='play' then return false end
     for _,defender in ipairs({'A','B'}) do
-        if crossed(match.goals[defender],ball,x,y,h,match.crossings,defender) then
-            local scorer=defender=='A' and 'B' or 'A'
+        if match.goals[defender] and crossed(match.goals[defender],ball,x,y,h,match.crossings,defender) then
+            local scorer=match.mode=='practice' and 'A' or (defender=='A' and 'B' or 'A')
             match['score'..scorer]=match['score'..scorer]+1
             match.phase='goal'; match.lastScoringTeam=scorer; match.resetAt=time+M.pauseSeconds
+            if match.mode~='practice' and match['score'..scorer]>=M.winningScore then
+                match.phase='finished';match.winner=scorer;match.resetAt=nil
+            end
             ball.vx=0; ball.vy=0; ball.vz=0
             return true
         end

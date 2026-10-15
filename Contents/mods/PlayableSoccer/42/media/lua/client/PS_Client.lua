@@ -100,7 +100,7 @@ function C.receive(command,args)
         PSSetup.receive(command,args);return
     end
     if command~="state" or not PSCore.finite(args.revision) or args.revision<C.revision then return end
-    local samples={};local t=now();local setupId
+    local samples={};local t=now();local setupId,setupMode
     for _,b in pairs(args.balls or {}) do
         if b.id and PSCore.finite(b.x) and PSCore.finite(b.y) and PSCore.finite(b.z) and PSCore.finite(b.h) then
             local prior=C.samples[b.id]
@@ -118,7 +118,7 @@ function C.receive(command,args)
                 PSMotion.play(player(),b.lob==true,b.kickDx,b.kickDy,b.kickPower)
             end
             if C.pendingItem==b.itemId and player() and b.owner==owner(player()) then
-                if C.pendingMode=='match' then setupId=b.id else C.selected=b.id end
+                setupId=b.id;setupMode=C.pendingMode
                 C.pendingItem=nil;C.pendingMode=nil
             end
         end
@@ -126,7 +126,7 @@ function C.receive(command,args)
     C.state=args;C.samples=samples;C.revision=args.revision;C.receivedAt=t
     if C.selected and not C.ball(C.selected) then C.leave() end
     PSSetup.receive(command,args)
-    if setupId then PSSetup.begin(setupId) end
+    if setupId then PSSetup.begin(setupId,setupMode) end
 end
 -- Render local possession at a small current-facing offset, never translate
 -- an old world-space ball offset through a turn. Server owns contacts/goals.
@@ -207,6 +207,7 @@ function C.ready()
         and now()>=(C.tacklingUntil or 0)
         and (not b.possession or (b.possession.kind=='player' and b.possession.key==owner(p)))
         and (not b.match or b.match.phase=='play')
+        and (not b.match or b.match.mode~='practice' or b.owner==owner(p))
         and PSRender.available() and PSProjection.available() and not PSSetup.active() and b.h<=.35 and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=(b.possession and PSCore.possessionKickRange or PSCore.kickRange)^2 and not C.blocked()
 end
 function C.inputActive(ignoreHover)
@@ -286,21 +287,22 @@ end
 function C.join(id,team)
     local b=C.ball(id);local p=player()
     if not b or not p or math.floor(p:getZ())~=b.z or (p:getX()-b.x)^2+(p:getY()-b.y)^2>64 then return end
+    if b.match and b.match.mode=='practice' and b.owner~=owner(p) then return end
     C.leave();C.selected=id
-    if b.match and (team=='A' or team=='B') then C.send('team',{id=id,team=team}) end
+    if b.match and b.match.mode~='practice' and (team=='A' or team=='B') then C.send('team',{id=id,team=team}) end
 end
 function C.joinMenu(context)
     local p=player();if not p then return end
     for _,b in ipairs(C.state.balls) do
         if math.floor(p:getZ())==b.z and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=64 then
             local id=b.id
-            if b.match then
+            if b.match and b.match.mode~='practice' then
                 for _,team in ipairs({'A','B'}) do
                     local choice=team
                     local label=getText('UI_PS_JoinMatch')..' #'..tostring(id)..' ('..tostring(b.owner)..') · '..getText('UI_PS_Team'..team)
                     context:addOption(label,nil,function() C.join(id,choice) end)
                 end
-            else
+            elseif not b.match or b.owner==owner(p) then
                 context:addOption(getText('UI_PS_JoinBall')..' #'..tostring(id),nil,function() C.join(id) end)
             end
         end
@@ -315,7 +317,7 @@ function C.openMenu()
     C.control(false)
     menu:addOption(getText('UI_PS_SoccerMenu'),nil,nil).notAvailable=true
     menu:addOption(getText('UI_PS_Resume'),nil,C.closeMenu)
-    if b.match then
+    if b.match and b.match.mode~='practice' then
         for _,team in ipairs({'A','B'}) do
             local choice=team
             menu:addOption(getText('UI_PS_Team'..team),nil,function() C.closeMenu();C.send('team',{id=b.id,team=choice}) end)
@@ -323,7 +325,12 @@ function C.openMenu()
     end
     if b.owner==owner(p) then
         menu:addOption(getText('UI_PS_ResetBall'),nil,function() C.closeMenu();C.send('reset',{id=b.id}) end)
-        menu:addOption(getText('UI_PS_ConfigureGoals'),nil,function() C.closeMenu();PSSetup.begin(b.id) end)
+        local mode=b.match and b.match.mode or 'match'
+        local label=mode=='practice' and 'UI_PS_ConfigurePracticeGoal' or 'UI_PS_ConfigureGoals'
+        menu:addOption(getText(label),nil,function() C.closeMenu();PSSetup.begin(b.id,mode) end)
+        if b.match and b.match.phase=='finished' then
+            menu:addOption(getText('UI_PS_RestartMatch'),nil,function() C.closeMenu();C.send('restart',{id=b.id}) end)
+        end
         menu:addOption(getText('UI_PS_StopBall'),b.id,C.stop)
     end
     menu:addOption(getText('UI_PS_LeaveBall'),nil,C.leave)

@@ -50,4 +50,4 @@ check(context.options[2].label=="ContextMenu_PS_Start" and context.options[3].la
 PS_BallMenu.createMatch(player,ownedSports)
 check(Mock.started==ownedSports and Mock.mode=="match","create enters placement workflow")
 PS_BallMenu.start(player,ownedSports)
-check(Mock.mode==nil,"free practice skips placement")
+check(Mock.mode=="practice","solo practice enters one-goal placement")

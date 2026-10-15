@@ -57,3 +57,31 @@ b=ball(); b.x=.5; b.vx=-16
 C.step(b,.2,nil,function(ball,x,y,h) return M.segment(ball,x,y,h,1) end)
 assert(b.match.scoreB==1 and b.vx==0,'substep scoring stops before further movement')
 print('PASS soccer swept goals, height, direction, pause and reset identity')
+
+-- Competitive completion cannot be bypassed by the ordinary ball recovery.
+for _,defender in ipairs({'A','B'}) do
+    b=ball()
+    local scorer=defender=='A' and 'B' or 'A'
+    for i=1,5 do
+        b.x=defender=='A' and -.2 or 10.2
+        assert(M.segment(b,defender=='A' and .2 or 9.8,0,0,i))
+        assert(b.match['score'..scorer]==i)
+        if i<5 then assert(b.match.phase=='goal');M.reset(b) end
+    end
+    assert(b.match.phase=='finished' and b.match.winner==scorer and b.match.resetAt==nil)
+    M.reset(b);assert(b.match.phase=='finished' and b.match['score'..scorer]==5)
+    assert(not M.segment(b,.2,0,0,100))
+    assert(M.restart(b) and b.match.phase=='play' and not b.match.winner and b.match.scoreA==0 and b.match.scoreB==0)
+end
+b=C.newBall(5,0,0);b.match=assert(M.configure(a,nil,center,'practice'))
+assert(b.match.goals.A and not b.match.goals.B)
+for i=1,8 do
+    b.x=-.2;assert(M.segment(b,.2,0,0,i))
+    assert(b.match.scoreA==i and b.match.phase=='goal' and not b.match.winner)
+    M.reset(b);assert(b.match.phase=='play')
+end
+assert(not M.restart(b))
+assert(not M.configure(a,nil,center,'match'))
+assert(not M.configure(a,nil,{x=1,y=0},'practice'))
+assert(not M.configure(a,nil,center,'bad-mode'))
+print('PASS first five wins, explicit restart, one-goal unlimited practice')

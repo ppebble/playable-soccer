@@ -1,6 +1,6 @@
 {
   "ContextMenu_PS_ConvertSports": "스포츠용 축구공으로 전환",
   "ContextMenu_PS_ConvertBack": "일반 축구공으로 되돌리기",
-  "ContextMenu_PS_Start": "자유 연습",
+  "ContextMenu_PS_Start": "혼자 골대 연습",
   "ContextMenu_PS_CreateMatch": "경기 만들기 · 골대 두 줄 지정"
 }

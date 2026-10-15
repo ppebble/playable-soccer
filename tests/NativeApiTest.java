@@ -28,6 +28,9 @@ public final class NativeApiTest {
         method(global,"sendEquip",cls(player));
         method(player,"setPrimaryHandItem",itemClass);
         method(player,"setSecondaryHandItem",itemClass);
+        Class<?> perk=cls("zombie.characters.skills.PerkFactory$Perk");
+        method(global,"addXp",cls(player),perk,float.class);
+        method("zombie.network.GameServer","addXp",cls(player),perk,float.class);
         Class<?> square=cls("zombie.iso.IsoGridSquare");
         for(String name:new String[]{"TreatAsSolidFloor","isSolid","isSolidTrans"}) method(square.getName(),name);
         method(square.getName(),"isBlockedTo",square);

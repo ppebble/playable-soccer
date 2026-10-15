@@ -54,3 +54,6 @@ function M.player(name,x,y,id)
     return p
 end
 function M.send(p,c,args) M.time=M.time+600; M.command('PlayableSoccer',c,p,args or {}) end
+
+Perks={Strength="Strength",Aiming="Aiming"}
+function addXp(p,perk,amount) p.xp=p.xp or {};p.xp[perk]=(p.xp[perk] or 0)+amount end

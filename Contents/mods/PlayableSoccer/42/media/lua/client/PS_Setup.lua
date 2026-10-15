@@ -14,9 +14,9 @@ end
 function S.receive(command,args)
     local pending=S.pending
     if not pending or not pending.submitted then return end
-    if command=="notice" and args.key=="UI_PS_GoalsInvalid" then
+    if command=="notice" and (args.key=="UI_PS_GoalsInvalid" or args.key=="UI_PS_PracticeGoalsInvalid") then
         pending.points={};pending.submitted=nil;pending.accepted=nil
-    elseif command=="notice" and args.key=="UI_PS_GoalsReady" then
+    elseif command=="notice" and (args.key=="UI_PS_GoalsReady" or args.key=="UI_PS_PracticeReady") then
         pending.accepted=true
     elseif command=="state" and pending.accepted then
         S.cancel()
@@ -34,14 +34,17 @@ function S.validLine(a,b)
     local length=math.sqrt((b.x-a.x)^2+(b.y-a.y)^2)
     return length>=2 and length<=10
 end
-function S.begin(id)
+function S.begin(id,mode)
     local C=PSClient
     if not PSProjection.available() then C.notice("UI_PS_CameraUnsupported"); return end
     local b=C.ball(id)
     if not b then return end
+    local p=getSpecificPlayer(0)
+    if not p then return end
+    mode=mode=="practice" and "practice" or "match"
     C.leave()
-    S.pending={id=id,z=b.z,points={}}
-    C.notice("UI_PS_Place1")
+    S.pending={id=id,z=b.z,points={},mode=mode,center={x=p:getX(),y=p:getY()}}
+    C.notice(mode=="practice" and "UI_PS_PracticePlace1" or "UI_PS_Place1")
 end
 function S.click(button)
     if not S.pending then return false end
@@ -59,16 +62,23 @@ function S.click(button)
         C.notice("UI_PS_LineInvalid");return true
     end
     points[#points+1]=point
-    if #points==4 then
-        local center={x=(points[1].x+points[2].x+points[3].x+points[4].x)/4,
-            y=(points[1].y+points[2].y+points[3].y+points[4].y)/4}
+    if #points==(pending.mode=="practice" and 2 or 4) then
+        local center=pending.center
+        local args={id=pending.id,mode=pending.mode,
+            goalA={ax=points[1].x,ay=points[1].y,bx=points[2].x,by=points[2].y}}
+        if pending.mode~="practice" then
+            center={x=(points[1].x+points[2].x+points[3].x+points[4].x)/4,
+                y=(points[1].y+points[2].y+points[3].y+points[4].y)/4}
+            args.goalB={ax=points[3].x,ay=points[3].y,bx=points[4].x,by=points[4].y}
+        end
+        args.center=center
         pending.submitted=getTimestampMs()
         C.notice("UI_PS_SetupWaiting")
-        C.send("configure",{id=pending.id,
-            goalA={ax=points[1].x,ay=points[1].y,bx=points[2].x,by=points[2].y},
-            goalB={ax=points[3].x,ay=points[3].y,bx=points[4].x,by=points[4].y},center=center})
-
-    else C.notice("UI_PS_Place"..tostring(#points+1)) end
+        C.send("configure",args)
+    else
+        local prefix=pending.mode=="practice" and "UI_PS_PracticePlace" or "UI_PS_Place"
+        C.notice(prefix..tostring(#points+1))
+    end
     return true
 end
 function S.menu(index,context,C)
@@ -77,7 +87,9 @@ function S.menu(index,context,C)
     if not p then return end
     for _,b in pairs(C.state.balls or {}) do
         if b.owner==owner(p) then
-            context:addOption(getText("UI_PS_ConfigureGoals"),b.id,S.begin)
+            local practice=b.match and b.match.mode=="practice"
+            context:addOption(getText(practice and "UI_PS_ConfigurePracticeGoal" or "UI_PS_ConfigureGoals"),b.id,
+                function(id) S.begin(id,practice and "practice" or "match") end)
             if b.match then
                 context:addOption(getText("UI_PS_ResetBall"),b.id,function(id) C.send("reset",{id=id}) end)
             end
@@ -93,7 +105,7 @@ function S.menu(index,context,C)
             end
         end
     end
-    if b and b.match then
+    if b and b.match and b.match.mode~="practice" then
         context:addOption(getText("UI_PS_TeamA"),b.id,function(id) C.selected=id;C.send("team",{id=id,team="A"}) end)
         context:addOption(getText("UI_PS_TeamB"),b.id,function(id) C.selected=id;C.send("team",{id=id,team="B"}) end)
     end

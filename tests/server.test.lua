@@ -353,6 +353,7 @@ local function feedShooter(height)
     matchBall.match.phase='play'
     advance(.01)
 end
+local zoneXp=(p.xp and p.xp.Strength or 0)+(other.xp and other.xp.Strength or 0)
 feedShooter(0)
 assert(matchBall.possession and matchBall.possession.key=='shooter','loose low pass is received')
 local receiveX=matchBall.x;local autoSerial=matchBall.kickSerial
@@ -362,6 +363,7 @@ advance(.16)
 assert(not matchBall.possession and matchBall.kickSerial==autoSerial+1 and matchBall.vx>0 and matchBall.vy>0 and matchBall.vz==0,'automatic ground shot aims diagonally at goal B center')
 assert(math.abs(matchBall.vy/matchBall.vx-(0-shooter.y)/(10-shooter.x))<.00001,'shot direction uses goal-center vector')
 assert(matchBall.kicker=='zone:shooter')
+assert((p.xp and p.xp.Strength or 0)+(other.xp and other.xp.Strength or 0)==zoneXp,'automatic shot grants no player XP')
 local score=matchBall.match.scoreA
 for i=1,100 do advance(.02);if matchBall.match.phase=='goal' then break end end
 assert(matchBall.match.scoreA==score+1 and matchBall.match.phase=='goal','receiver shot scores through normal goal authority')
@@ -433,12 +435,14 @@ local function feedPass(lastKey)
     matchBall.x=passer.x;matchBall.y=passer.y;matchBall.h=0;matchBall.vx=0;matchBall.vy=0;matchBall.vz=0
     advance(.01)
 end
+zoneXp=(p.xp and p.xp.Strength or 0)+(other.xp and other.xp.Strength or 0)
 feedPass('other')
 assert(matchBall.possession and matchBall.possession.key=='passer' and matchBall.possession.feeder=='other','passer remembers real feeder rather than latest automated kicker or nearby owner')
 local passSerial=matchBall.kickSerial
 advance(.2);assert(matchBall.possession and matchBall.kickSerial==passSerial,'passer visibly holds')
 other.y=2;advance(.16)
 assert(not matchBall.possession and matchBall.kicker=='zone:passer' and matchBall.kickSerial==passSerial+1 and matchBall.vz==0)
+assert((p.xp and p.xp.Strength or 0)+(other.xp and other.xp.Strength or 0)==zoneXp,'automatic pass grants no player XP')
 assert(math.abs(matchBall.vy/matchBall.vx-2/3.5)<.00001,'return aims at feeder current release position')
 other.x=9;other.y=3;S.controls={}
 for i=1,100 do advance(.025) end
@@ -493,3 +497,45 @@ matchBall.lastPlayerKicker='other';matchBall.match.phase='goal';matchBall.match.
 advance(.2)
 assert(matchBall.lastPlayerKicker==nil,'goal restart clears feeder')
 print('PASS pass-return zone recipient identity, current aim, endpoint, invalid recipients and lifecycle')
+
+-- Isolated single-goal practice, XP, and finished-match authority.
+M.wall=nil;M.missing=nil;M.unloaded=nil;M.squares={};M.players={p,other}
+p.name='owner';p.x=5;p.y=0;p.z=0;p.dead=false;p.onFloor=false;p.knockedDown=false;p.vehicle=nil
+other.x=5;other.y=0;other.z=0;other.dead=false;other.vehicle=nil;other.onFloor=false
+S.balls={};S.controls={};S.stunned={};S.rates={}
+M.send(p,'start',{itemId=100})
+local solo=S.balls[S.serial]
+local practice={id=solo.id,mode='practice',goalA={ax=0,ay=-2,bx=0,by=2},center={x=5,y=0}}
+M.send(p,'configure',practice)
+assert(solo.match.mode=='practice' and solo.match.goals.A and not solo.match.goals.B and not solo.match.testZones)
+M.send(other,'control',{id=solo.id,active=true});assert(not S.controls.other)
+local xpOther=other.xp and other.xp.Strength or 0
+M.send(other,'kick',{id=solo.id,dx=1,dy=0,power=.5});assert(solo.vx==0 and (other.xp and other.xp.Strength or 0)==xpOther)
+M.send(other,'team',{id=solo.id,team='B'});assert(not solo.match.teams.other)
+M.send(other,'stop',{id=solo.id});assert(S.balls[solo.id]==solo)
+local strength,aiming=p.xp and p.xp.Strength or 0,p.xp and p.xp.Aiming or 0
+M.send(p,'kick',{id=solo.id,dx=1,dy=0,power=.5})
+assert(p.xp.Strength==strength+1 and p.xp.Aiming==aiming+1,'accepted manual kick earns both XP once')
+S.command(p,'kick',{id=solo.id,dx=1,dy=0,power=.5})
+assert(p.xp.Strength==strength+1,'rate rejected kick has no XP')
+M.send(p,'kick',{id=solo.id,dx=0,dy=0,power=.5})
+assert(p.xp.Strength==strength+1,'invalid kick has no XP')
+for i=1,6 do
+    solo.x=-.2;solo.y=0;solo.h=0
+    assert(PSMatch.segment(solo,.2,0,0,M.time/1000))
+    M.time=M.time+2100;M.tick()
+    assert(solo.match.phase=='play' and solo.match.scoreA==i)
+end
+M.send(p,'configure',{id=solo.id,goalA=practice.goalA,goalB={ax=10,ay=-2,bx=10,by=2},center=practice.center})
+solo.match.scoreA=4;solo.x=10.2
+assert(PSMatch.segment(solo,9.8,0,0,M.time/1000))
+assert(solo.match.phase=='finished' and solo.match.winner=='A')
+local endX=solo.x;solo.vx=2;M.time=M.time+5000;M.tick()
+assert(solo.x==endX and solo.vx==0 and solo.match.phase=='finished','finished match never advances automatically')
+M.send(p,'reset',{id=solo.id});assert(solo.match.phase=='finished' and solo.match.scoreA==5 and solo.x==5)
+strength=p.xp.Strength
+M.send(p,'kick',{id=solo.id,dx=1,dy=0,power=.5});assert(p.xp.Strength==strength and solo.vx==0)
+M.send(other,'restart',{id=solo.id});assert(solo.match.phase=='finished')
+M.send(p,'restart',{id=solo.id});assert(solo.match.phase=='play' and solo.match.scoreA==0 and solo.match.scoreB==0 and not solo.match.winner)
+M.send(p,'stop',{id=solo.id});assert(not S.balls[solo.id])
+print('PASS practice privacy, manual kick XP, five-goal freeze and owner restart')

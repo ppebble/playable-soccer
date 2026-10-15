@@ -7,7 +7,7 @@
   "UI_PS_RenderError": "축구공을 표시하지 못했습니다. 3D 바닥 아이템 표시 옵션을 확인하세요. 우클릭 메뉴에서 연습을 종료할 수 있습니다.",
   "UI_PS_TooManyBalls": "서버의 연습용 공 한도에 도달했습니다. 기존 연습을 먼저 종료하세요.",
   "UI_PS_StartFailed": "연습을 시작하지 못했습니다. 스포츠용 공을 주 인벤토리에 넣고 장애물이 없는 바닥에 서세요.",
-  "UI_PS_Practice": "축구 자유 연습",
+  "UI_PS_Practice": "축구 혼자 연습",
   "UI_PS_Goal": "골! %1 팀 득점 · 중앙에서 재개합니다",
   "UI_PS_Ground": "땅볼 킥",
   "UI_PS_Lob": "로빙 킥",
@@ -43,5 +43,16 @@
   "UI_PS_ShooterZone": "B 슛 구역 · 공을 보내면 B 골문으로 자동 슛",
   "UI_PS_ShooterPossession": "슛 구역이 공 소유 · B 골문으로 슛 준비",
   "UI_PS_PasserZone": "리턴 패스 구역 · 공을 보내면 내 쪽으로 패스",
-  "UI_PS_PasserPossession": "패스 구역이 공 소유 · 보낸 선수에게 패스 준비"
+  "UI_PS_PasserPossession": "패스 구역이 공 소유 · 보낸 선수에게 패스 준비",
+  "UI_PS_PracticeScore": "혼자 연습 · 득점: %1",
+  "UI_PS_PracticePlace1": "연습 골대: 첫 번째 기둥을 클릭하세요. 시작한 위치로 공이 돌아옵니다. 골대는 그 위치에서 2칸 이상 떨어뜨리세요.",
+  "UI_PS_PracticePlace2": "연습 골대: 두 번째 기둥을 클릭하세요(너비 2~10칸). 우클릭/Esc로 취소합니다.",
+  "UI_PS_PracticeReady": "연습 시작! 골 수에 관계없이 계속됩니다. Esc 메뉴에서 직접 종료하세요.",
+  "UI_PS_PracticeGoalsInvalid": "연습 골대 위치를 확인하세요: 빈 바닥, 너비 2~10칸, 시작 위치에서 골문까지 2칸 이상. 모든 지점은 40칸 이내여야 합니다.",
+  "UI_PS_PracticeGoal": "골! 다음 슛을 위해 공을 되돌립니다.",
+  "UI_PS_PracticeRule": "득점 제한 없는 연습 · Esc 메뉴에서 종료",
+  "UI_PS_FirstToFive": "먼저 5골을 넣는 팀 승리",
+  "UI_PS_MatchFinished": "%1팀 승리! · Esc 메뉴에서 재경기",
+  "UI_PS_RestartMatch": "재경기 (점수 초기화)",
+  "UI_PS_ConfigurePracticeGoal": "축구: 연습 골대 한 줄 지정"
 }

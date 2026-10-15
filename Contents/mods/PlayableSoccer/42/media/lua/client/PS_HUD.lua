@@ -39,9 +39,14 @@ function H.render(panel,C)
     if selected then
         panel:drawRect(cx-width/2,24,width,142,.82,.04,.07,.09)
         local m=selected.match
-        local title=m and ("A  "..tostring(m.scoreA).."  :  "..tostring(m.scoreB).."  B") or getText("UI_PS_Practice")
+        local practice=m and m.mode=="practice"
+        local title=practice and getText("UI_PS_PracticeScore",m.scoreA or 0) or m and ("A  "..tostring(m.scoreA).."  :  "..tostring(m.scoreB).."  B") or getText("UI_PS_Practice")
         panel:drawTextCentre(title,cx,30,1,.95,.78,1,UIFont.Large)
-        local detail=m and m.phase=="goal" and getText("UI_PS_Goal",m.lastScoringTeam or "") or getText("UI_PS_Controls")
+        local detail=getText("UI_PS_Controls")
+        if m and m.phase=="finished" then detail=getText("UI_PS_MatchFinished",m.winner or "")
+        elseif m and m.phase=="goal" then
+            detail=practice and getText("UI_PS_PracticeGoal") or getText("UI_PS_Goal",m.lastScoringTeam or "")
+        end
         panel:drawTextCentre(detail,cx,65,.7,.9,1,1,UIFont.Small)
         local power=C.charge and PSCore.chargePower(getTimestampMs()-C.charge.at) or 0
         local barWidth=math.min(300,width-24)
@@ -62,11 +67,13 @@ function H.render(panel,C)
             if power>=1 then label=label.."  "..getText("UI_PS_ChargeMax") end
         end
         panel:drawTextCentre(label,cx,116,1,1,1,1,UIFont.Small)
-        panel:drawTextCentre(getText("UI_PS_ChargeRange"),cx,140,.8,.85,.9,1,UIFont.Small)
+        local rule=m and getText(practice and "UI_PS_PracticeRule" or "UI_PS_FirstToFive") or getText("UI_PS_ChargeRange")
+        panel:drawTextCentre(rule,cx,140,.8,.85,.9,1,UIFont.Small)
     end
     if PSSetup.pending then
         local pending=PSSetup.pending
-        local key=pending.submitted and "UI_PS_SetupWaiting" or ("UI_PS_Place"..tostring(#pending.points+1))
+        local prefix=pending.mode=="practice" and "UI_PS_PracticePlace" or "UI_PS_Place"
+        local key=pending.submitted and "UI_PS_SetupWaiting" or (prefix..tostring(#pending.points+1))
         panel:drawTextCentre(getText(key),cx,60,1,.95,.78,1,UIFont.Small)
     end
     if C.message and getTimestampMs()<(C.messageUntil or 0) then

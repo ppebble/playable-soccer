@@ -119,3 +119,33 @@ for _,entry in ipairs(TEST.texts) do
     if entry.text=="UI_PS_PasserPossession" then passOwner=true end
 end
 check(passZone and passOwner,"return pass zone and receiving status labeled")
+
+-- Solo practice needs only one line and uses the captured starting position.
+TEST.commands={};TEST.ball.match=nil
+PSSetup.begin(1,"practice")
+check(PSSetup.pending.mode=="practice" and PSSetup.pending.center.x==5,"practice stores restart anchor at setup start")
+TEST.mx=10;TEST.my=10;PSSetup.click(0)
+check(#PSSetup.pending.points==1 and PSClient.message=="UI_PS_PracticePlace2","practice prompts for second endpoint")
+TEST.mx=50;PSSetup.click(0)
+local practice=TEST.commands[1]
+check(#TEST.commands==1 and PSSetup.pending.submitted,"one line submits practice after two clicks")
+check(practice.args.mode=="practice" and practice.args.goalB==nil and practice.args.center.x==5 and practice.args.center.y==5,"practice sends one goal and original restart position")
+PSSetup.receive("notice",{key="UI_PS_PracticeGoalsInvalid"})
+check(not PSSetup.pending.submitted and #PSSetup.pending.points==0,"practice rejection allows redraw")
+TEST.mx=10;PSSetup.click(0);TEST.mx=50;PSSetup.click(0)
+PSSetup.receive("notice",{key="UI_PS_PracticeReady"});PSSetup.receive("state",{})
+check(not PSSetup.active(),"practice acknowledgment resumes controls")
+TEST.ball.match={mode="practice",scoreA=8,scoreB=0,phase="play",goals={A={ax=1,ay=1,bx=5,by=1}}}
+PSClient.selected=1;TEST.texts={};PSHUD.render(TEST.panel,PSClient)
+check(TEST.texts[1].text=="UI_PS_PracticeScore8","solo goal count supports more than five goals without team scoreboard")
+local unlimited=false
+for _,entry in ipairs(TEST.texts) do if entry.text=="UI_PS_PracticeRule" then unlimited=true end end
+check(unlimited,"practice explicitly shows manual ending rule")
+menu.options={};PSSetup.menu(0,menu,PSClient)
+check(not menu.options.UI_PS_TeamA and not menu.options.UI_PS_TeamB and menu.options.UI_PS_ConfigurePracticeGoal,"practice hides team selection and offers one-goal setup")
+TEST.ball.match={mode="match",scoreA=5,scoreB=2,phase="finished",winner="A",goals={}}
+TEST.texts={};PSHUD.render(TEST.panel,PSClient)
+check(TEST.texts[1].text=="A  5  :  2  B" and TEST.texts[2].text=="UI_PS_MatchFinishedA","finished match shows final score and winner")
+local five=false
+for _,entry in ipairs(TEST.texts) do if entry.text=="UI_PS_FirstToFive" then five=true end end
+check(five,"competitive HUD shows five-goal rule")

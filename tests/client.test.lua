@@ -6,7 +6,8 @@ local item={getID=function() return 17 end,getFullType=function() return "Playab
 C.start(TEST.player,item)
 assert(TEST.sent[1].command=="start" and TEST.sent[1].args.itemId==17)
 assert(C.isItemActive(TEST.player,item))
-C.receive("state",state(1));assert(C.selected==1)
+C.receive("state",state(1));assert(TEST.setup==1 and TEST.setupMode=="practice" and not C.selected)
+TEST.setup=nil;C.selected=1 -- simulate confirmed setup; integrated workflow covers the real two clicks.
 TEST.buttons[0]=true;C.mouseDown();assert(C.charge)
 TEST.time=1225;TEST.buttons[0]=false;C.update(TEST.player)
 assert(TEST.sent[#TEST.sent].command=="kick" and TEST.sent[#TEST.sent].args.power==0.5)
@@ -262,3 +263,17 @@ localHeld.balls[1].possession.key='remote';assert(C.positions()[1].x==10.4,'remo
 localHeld.balls[1].possession=nil;assert(C.positions()[1].x==10.4,'released ball never follows local player')
 TEST.x=nil;TEST.y=nil;C.leave()
 print('PASS bounded local holder compensation, unchanged authority, walls, floor, stale packets and release')
+
+-- Solo sessions cannot be joined as an opposing player, and finished matches expose restart only to owner.
+local solo=state(300);solo.balls[1].owner='someone';solo.balls[1].match={mode='practice',phase='play'}
+C.receive('state',solo);C.leave()
+local soloMenu=ISContextMenu.get();C.joinMenu(soloMenu);assert(#soloMenu.options==0)
+C.join(1,'B');assert(not C.selected)
+C.selected=1;assert(not C.ready(),'another player cannot kick solo ball');C.leave()
+solo.balls[1].owner='test';C.receive('state',solo);C.selected=1;C.openMenu()
+assert(option(C.menu,'UI_PS_ConfigurePracticeGoal') and not option(C.menu,'UI_PS_TeamB'))
+C.closeMenu();solo.balls[1].match={mode='match',phase='finished',winner='A'}
+C.receive('state',solo);C.selected=1;C.openMenu()
+local restart=option(C.menu,'UI_PS_RestartMatch');assert(restart)
+restart.callback();assert(TEST.sent[#TEST.sent].command=='restart')
+C.ball(1).owner='someone';C.openMenu();assert(not option(C.menu,'UI_PS_RestartMatch'));C.leave()
