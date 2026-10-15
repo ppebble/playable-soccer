@@ -54,7 +54,7 @@ end
 
 local M=PSMotion
 M.tackleDiagnosticCount=0
-print('[PlayableSoccer motion v0.5.9] intended original PS_PowerTackle')
+print('[PlayableSoccer motion v0.5.10] intended PS_BasicPushTackle / Bob_Shove')
 local function tackleDiagnostic(id,phase,p,reason)
     if not id or id>5 then return end
     local ok,value=pcall(function() return p and p:getVariableString('PerformingAction') end)
@@ -113,8 +113,8 @@ function M.fall(p)
     return true
 end
 
--- Shoulder gesture only: no attack/shove events and no root displacement.
-M.tackleMilliseconds=667
+-- Native push gesture only: no attack/shove events and no root displacement.
+M.tackleMilliseconds=600
 PS_TackleAction=ISBaseTimedAction:derive('PS_TackleAction')
 function PS_TackleAction:isValid()
     local p=self.character
@@ -130,7 +130,7 @@ function PS_TackleAction:start()
         self.action:setBlockMovementEtc(false)
         -- A single facing request; ordinary locomotion keeps control thereafter.
         self.character:faceLocation(self.character:getX()+self.dx,self.character:getY()+self.dy)
-        self:setActionAnim('PS_PowerTackle')
+        self:setActionAnim('PS_BasicPushTackle')
     end)
     tackleDiagnostic(self.diagnosticId,'start',self.character,not ok and 'unavailable' or nil)
     if not ok then self:forceStop() end
@@ -154,9 +154,8 @@ function PS_TackleAction:animEvent(event,parameter) end
 function PS_TackleAction:adjustMaxTime(time) return time end
 function PS_TackleAction:new(p,dx,dy)
     local o=ISBaseTimedAction.new(self,p)
-    -- Original upright shoulder-check: .56s plus .08s blend-out fits20 ticks.
-    -- Torso/arms only, no combat events or root travel.
-    o.maxTime=20
+    -- Native forward shove: torso/arms only, no combat events or root travel.
+    o.maxTime=18
     o.stopOnWalk,o.stopOnRun,o.stopOnAim=false,false,false
     o.ballId=PSClient and PSClient.selected
     o.dx,o.dy=dx,dy

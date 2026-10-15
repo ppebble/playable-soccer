@@ -128,7 +128,8 @@ function C.receive(command,args)
     PSSetup.receive(command,args)
     if setupId then PSSetup.begin(setupId) end
 end
--- Render-only local holder compensation. The server still owns contacts/goals.
+-- Render local possession at a small current-facing offset, never translate
+-- an old world-space ball offset through a turn. Server owns contacts/goals.
 local function clearVisualPath(z,fx,fy,tx,ty)
     local cell=getCell()
     local function square(x,y) return cell:getGridSquare(math.floor(x),math.floor(y),z) end
@@ -149,12 +150,18 @@ local function localHeldPosition(b,s,t)
     local held=b.possession;local p=player()
     if not p or C.selected~=b.id or C.controlId~=b.id or not held or held.kind~='player'
         or held.key~=owner(p) or not PSCore.finite(held.holderX) or not PSCore.finite(held.holderY)
-        or t-s.at>250 or p:getZ()~=b.z or b.h~=0 or p:isDead() or p:getVehicle()
+        or t-s.at>1000 or p:getZ()~=b.z or b.h~=0 or p:isDead() or p:getVehicle()
         or PSMotion.isDown(p) or (b.match and b.match.phase~='play') then return end
     local px,py=p:getX(),p:getY()
     local dx,dy=px-held.holderX,py-held.holderY
-    if dx*dx+dy*dy>4 then return end
-    local x,y=b.x+dx,b.y+dy
+    if dx*dx+dy*dy>36 then return end
+    local fx,fy=p:getForwardDirectionX(),p:getForwardDirectionY()
+    if not PSCore.finite(fx) or not PSCore.finite(fy) then return end
+    local length=math.sqrt(fx*fx+fy*fy)
+    if length<.001 then return end
+    local lead=PSCore.possessionLead(0)
+    local x,y=px+fx/length*lead,py+fy/length*lead
+    if not clearVisualPath(b.z,px,py,x,y) then x,y=px,py end
     if clearVisualPath(b.z,b.x,b.y,x,y) and clearVisualPath(b.z,px,py,x,y) then return x,y end
 end
 function C.positions()

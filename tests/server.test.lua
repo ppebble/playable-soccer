@@ -286,12 +286,12 @@ for batch=1,8 do
     assert(matchBall.possession,'400ms position batch must allow catch-up beyond old two-tile cutoff')
 end
 for i=1,24 do S.command(p,'control',{id=2,active=true});advance(1/60) end
-assert(math.abs(matchBall.x-p.x-.85)<.01,'batched updates converge to the feet')
+assert(math.abs(matchBall.x-p.x-.4)<.01,'batched updates converge to the feet')
 -- Turn sharply, stop, and tolerate a small same-time position correction.
 p.faceX=-1;p.x=p.x-.2;advance(1/60)
 assert(matchBall.possession,'sharp reversal retains ownership')
 for i=1,30 do S.command(p,'control',{id=2,active=true});advance(1/60) end
-assert(math.abs(matchBall.x-p.x+.85)<.01,'stopped ball settles ahead of new facing')
+assert(math.abs(matchBall.x-p.x+.4)<.01,'stopped ball settles ahead of new facing')
 p.x=p.x+.5;M.tick();assert(matchBall.possession,'same-timestamp correction is not an automatic release')
 -- Repeated lag cannot retain a ball indefinitely, and remote teleports still fail.
 for i=1,12 do

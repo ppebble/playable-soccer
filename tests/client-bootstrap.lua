@@ -47,7 +47,7 @@ PSHUD={render=function() TEST.hudRendered=true end}
 PSMotion={play=function(p,lob,dx,dy,power) TEST.motions=(TEST.motions or 0)+1;TEST.motionLob=lob;TEST.motionPower=power end}
 PSMotion.fall=function(p) assert(p==TEST.player);TEST.falls=(TEST.falls or 0)+1 end
 PSMotion.isDown=function(p) return TEST.down or TEST.onFloor end
-PSMotion.tackleMilliseconds=667
+PSMotion.tackleMilliseconds=600
 PSMotion.tackle=function(p,dx,dy)
     assert(p==TEST.player);TEST.tackles=(TEST.tackles or 0)+1;TEST.tackleDx=dx;TEST.tackleDy=dy
     return not TEST.noTackleMotion
@@ -87,3 +87,6 @@ IsoWorldInventoryObject={new=function(item,square,x,y,z)
     return {setSprite=function(self,sprite) assert(sprite.empty);TEST.emptySprite=true end,setSquare=function() end,setOffset=function() error("Must not sync detached proxy") end,setOffX=function() end,setOffY=function() end,setOffZ=function() end,setAlphaAndTarget=function() end,render=function() assert(TEST.emptySprite);TEST.renders=TEST.renders+1 end,
         addToWorld=function() error("Must never register proxy") end}
 end}
+
+TEST.player.getForwardDirectionX=function() return TEST.facingX or 1 end
+TEST.player.getForwardDirectionY=function() return TEST.facingY or 0 end

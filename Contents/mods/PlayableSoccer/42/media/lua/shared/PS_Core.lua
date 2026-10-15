@@ -9,7 +9,7 @@ C.maxSpeed = math.sqrt(2*C.groundDrag*C.maxDistance)
 C.kickRange = 1.4
 C.possessionKickRange = 2
 function C.possessionLead(speed)
-    return .85+math.min(.95,math.max(0,speed or 0)*.12)
+    return .4
 end
 C.dribbleRange = .8
 C.chargeMilliseconds = 450

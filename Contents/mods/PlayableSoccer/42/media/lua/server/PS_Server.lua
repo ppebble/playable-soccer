@@ -324,10 +324,9 @@ local function possessionTick(b,dt,t,all)
         -- A single speed-estimate spike is not a loss of control. Separation,
         -- grace expiry and swept collision checks remain the hard boundaries.
         local dx,dy=holder:getForwardDirectionX(),holder:getForwardDirectionY()
-        if motion and motion.dx then dx=motion.dx;dy=motion.dy end
         if not C.finite(dx) or not C.finite(dy) or dx*dx+dy*dy<.001 then release(b,t);return true end
         local length=math.sqrt(dx*dx+dy*dy)
-        -- Lead the holder enough to remain ahead through snapshot interpolation.
+        -- Keep possession close to the feet at every speed, including turns.
         local lead=C.possessionLead(motion and motion.speed)
         local tx,ty=holder:getX()+dx/length*lead,holder:getY()+dy/length*lead
         -- Near a wall, keep the ball at the feet instead of dropping possession

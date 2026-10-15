@@ -228,31 +228,22 @@ assert(C.ready(),'carried ball ahead remains chargeable')
 leadBall.possession=nil
 assert(not C.ready(),'forward loose ball retains original reach')
 
--- With 100ms state interpolation, the speed-dependent lead remains ahead.
-for index,speed in ipairs({4,8,12}) do
-    C.samples={};TEST.time=TEST.time+1000
-    local first=state(100+index*2,10+PSCore.possessionLead(speed))
-    first.balls[1].possession={kind='player',key='test'}
-    C.receive('state',first)
-    TEST.time=TEST.time+100
-    local nextState=state(101+index*2,10+speed*.1+PSCore.possessionLead(speed))
-    nextState.balls[1].possession={kind='player',key='test'}
-    C.receive('state',nextState)
-    TEST.time=TEST.time+50
-    assert(C.positions()[1].x>10+speed*.15,'interpolated carried ball stays ahead of moving holder')
-end
-
 -- Fresh local possession uses the current holder position, not delayed world interpolation.
 TEST.x=10;TEST.y=1;C.selected=1;C.controlId=1;C.samples={};TEST.time=100000
-local localHeld=state(200,11.8)
+local localHeld=state(200,10.4)
 localHeld.balls[1].possession={kind='player',key='test',holderX=10,holderY=1}
 localHeld.balls[1].match={phase='play'}
 C.receive('state',localHeld)
 TEST.x=11.2;TEST.time=100100
-assert(math.abs(C.positions()[1].x-13)<.00001,'local sprint holds exact forward offset without packet lag')
-assert(localHeld.balls[1].x==11.8 and localHeld.balls[1].possession.holderX==10,'visual correction never mutates server state')
-TEST.hole=true;assert(C.positions()[1].x==11.8,'unsupported floor disables prediction');TEST.hole=nil
-TEST.solid=true;assert(C.positions()[1].x==11.8,'solid tile disables prediction');TEST.solid=nil
+assert(math.abs(C.positions()[1].x-11.6)<.00001,'local sprint holds exact forward offset without packet lag')
+assert(localHeld.balls[1].x==10.4 and localHeld.balls[1].possession.holderX==10,'visual correction never mutates server state')
+TEST.facingX=-1
+assert(math.abs(C.positions()[1].x-10.8)<.00001,'turn immediately uses current close facing, never old forward offset')
+TEST.time=100400
+assert(math.abs(C.positions()[1].x-10.8)<.00001,'ordinary packet delay does not flip back to old world position')
+TEST.facingX=1;TEST.time=100100
+TEST.hole=true;assert(C.positions()[1].x==10.4,'unsupported floor disables prediction');TEST.hole=nil
+TEST.solid=true;assert(C.positions()[1].x==10.4,'solid tile disables prediction');TEST.solid=nil
 local squares={}
 TEST.grid=function(x,y,z)
     local key=x..':'..y
@@ -261,13 +252,13 @@ TEST.grid=function(x,y,z)
     end
     return squares[key]
 end
-assert(C.positions()[1].x==11.8,'wall edge disables local compensation')
+assert(C.positions()[1].x==10.4,'wall edge disables local compensation')
 TEST.grid=function() return nil end
-assert(C.positions()[1].x==11.8,'unloaded square disables local compensation');TEST.grid=nil
-TEST.x=13;assert(C.positions()[1].x==11.8,'teleport does not extrapolate ball')
-TEST.x=11.2;TEST.time=100251;assert(C.positions()[1].x==11.8,'stale snapshot disables correction')
-TEST.time=100100;localHeld.balls[1].z=1;assert(C.positions()[1].x==11.8,'different floor disables correction');localHeld.balls[1].z=0
-localHeld.balls[1].possession.key='remote';assert(C.positions()[1].x==11.8,'remote holder remains authoritative')
-localHeld.balls[1].possession=nil;assert(C.positions()[1].x==11.8,'released ball never follows local player')
+assert(C.positions()[1].x==10.4,'unloaded square disables local compensation');TEST.grid=nil
+TEST.x=17;assert(C.positions()[1].x==10.4,'teleport does not extrapolate ball')
+TEST.x=11.2;TEST.time=101001;assert(C.positions()[1].x==10.4,'stale snapshot disables correction')
+TEST.time=100100;localHeld.balls[1].z=1;assert(C.positions()[1].x==10.4,'different floor disables correction');localHeld.balls[1].z=0
+localHeld.balls[1].possession.key='remote';assert(C.positions()[1].x==10.4,'remote holder remains authoritative')
+localHeld.balls[1].possession=nil;assert(C.positions()[1].x==10.4,'released ball never follows local player')
 TEST.x=nil;TEST.y=nil;C.leave()
 print('PASS bounded local holder compensation, unchanged authority, walls, floor, stale packets and release')
