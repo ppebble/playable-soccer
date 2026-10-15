@@ -109,3 +109,13 @@ for _,entry in ipairs(TEST.texts) do
     if entry.text=="UI_PS_ShooterPossession" then shotOwner=true end
 end
 check(shotZone and shotOwner,"goal B shot zone and pending shot labeled")
+
+TEST.ball.match.testZones.passer={x=2,y=0,r=.9}
+TEST.ball.possession={kind="zone",key="passer"};TEST.texts={}
+PSHUD.render(TEST.panel,PSClient)
+local passZone,passOwner=false,false
+for _,entry in ipairs(TEST.texts) do
+    if entry.text=="UI_PS_PasserZone" then passZone=true end
+    if entry.text=="UI_PS_PasserPossession" then passOwner=true end
+end
+check(passZone and passOwner,"return pass zone and receiving status labeled")

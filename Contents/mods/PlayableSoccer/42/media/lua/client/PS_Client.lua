@@ -178,7 +178,8 @@ function C.inputActive(ignoreHover)
         and PSProjection.available() and PSRender.available() and not PSSetup.active() and not C.blocked(ignoreHover)
 end
 function C.tackle()
-    if not C.inputActive() or (C.lastTackle and now()-C.lastTackle<800) then return end
+    if not C.inputActive() or now()<(C.tacklingUntil or 0)
+        or (C.lastTackle and now()-C.lastTackle<800) then return end
     local p=player();local b=C.ball(C.selected)
     if not b or (b.match and b.match.phase~='play') or math.floor(p:getZ())~=b.z then return end
     local x,y=PSProjection.screenToWorld(0,getMouseX(),getMouseY(),b.z)

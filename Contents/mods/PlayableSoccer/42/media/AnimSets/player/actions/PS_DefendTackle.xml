@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <animNode>
-    <m_Name>PS_PushTackle</m_Name>
+    <m_Name>PS_DefendTackle</m_Name>
     <m_Priority>4</m_Priority>
-    <m_AnimName>Bob_Shove</m_AnimName>
+    <m_AnimName>Bob_BiteDefend</m_AnimName>
     <m_Looped>false</m_Looped>
     <m_BlendTime>0.08</m_BlendTime>
     <m_BlendOutTime>0.10</m_BlendOutTime>
-    <m_SpeedScale>1.35</m_SpeedScale>
+    <m_SpeedScale>1.40</m_SpeedScale>
     <m_SyncTrackingEnabled>false</m_SyncTrackingEnabled>
     <m_useDeferredMovement>false</m_useDeferredMovement>
     <m_deferredRotationScale>0.0</m_deferredRotationScale>
-    <m_Conditions><m_Name>PerformingAction</m_Name><m_Type>STRING</m_Type><m_Value>PS_PushTackle</m_Value></m_Conditions>
+    <m_Conditions><m_Name>PerformingAction</m_Name><m_Type>STRING</m_Type><m_Value>PS_DefendTackle</m_Value></m_Conditions>
     <m_SubStateBoneWeights><boneName>Bip01_Spine</boneName><weight>1.0</weight></m_SubStateBoneWeights>
 </animNode>

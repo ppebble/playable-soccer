@@ -41,5 +41,7 @@
   "UI_PS_TestZonesUnavailable": "Some test zones could not fit on clear ground. Redraw goals in an open area.",
   "UI_PS_Tackled": "Tackled! Possession lost.",
   "UI_PS_ShooterZone": "SHOT ZONE B · send the ball in for an automatic shot",
-  "UI_PS_ShooterPossession": "Shot zone has the ball · shooting at goal B"
+  "UI_PS_ShooterPossession": "Shot zone has the ball · shooting at goal B",
+  "UI_PS_PasserZone": "RETURN PASS · send the ball in for a pass back",
+  "UI_PS_PasserPossession": "Return pass zone has the ball · preparing a pass back"
 }

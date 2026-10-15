@@ -398,3 +398,76 @@ M.send(p,'configure',longPitch)
 local far=matchBall.match.testZones.shooter
 assert(far and far.x==12 and math.abs(far.y)==5,'large pitch uses eight-tile inward cap and five-tile flank')
 assert(math.abs(math.sqrt((far.x-20)^2+far.y^2)-math.sqrt(89))<.00001,'large-pitch shooter is about9.4tiles from goal')
+resetTest();M.send(p,'configure',config);advance(.4)
+local passer=matchBall.match.testZones.passer
+assert(passer and passer.x==2.5 and passer.y==0 and passer.r==.9,'passer lies between A midpoint and match center')
+local function feedPass(lastKey)
+    M.wall=nil;M.players={p,other};p.dead=false;p.z=0;p.onFloor=false;p.stateName=nil;p.x=5;p.y=0
+    other.dead=false;other.z=0;other.x=6;other.y=1;other.onFloor=false
+    S.stunned={};S.motion={}
+    S.controls={[ownerKey]={id=2,at=M.time/1000},other={id=2,at=M.time/1000}}
+    matchBall.match.phase='play';matchBall.possession=nil;matchBall.captureAfter=nil;matchBall.zoneGrace=nil
+    matchBall.passerZoneBlocked=nil;matchBall.lastPlayerKicker=lastKey;matchBall.kicker='zone:shooter'
+    matchBall.x=passer.x;matchBall.y=passer.y;matchBall.h=0;matchBall.vx=0;matchBall.vy=0;matchBall.vz=0
+    advance(.01)
+end
+feedPass('other')
+assert(matchBall.possession and matchBall.possession.key=='passer' and matchBall.possession.feeder=='other','passer remembers real feeder rather than latest automated kicker or nearby owner')
+local passSerial=matchBall.kickSerial
+advance(.2);assert(matchBall.possession and matchBall.kickSerial==passSerial,'passer visibly holds')
+other.y=2;advance(.16)
+assert(not matchBall.possession and matchBall.kicker=='zone:passer' and matchBall.kickSerial==passSerial+1 and matchBall.vz==0)
+assert(math.abs(matchBall.vy/matchBall.vx-2/3.5)<.00001,'return aims at feeder current release position')
+other.x=9;other.y=3;S.controls={}
+for i=1,100 do advance(.025) end
+assert(math.abs(matchBall.x-6)<.001 and math.abs(matchBall.y-2)<.001,'pass stops at sampled recipient location without homing')
+feedPass(nil);assert(matchBall.possession.feeder==ownerKey,'solo fallback targets registered owner only')
+S.controls[ownerKey]=nil;passSerial=matchBall.kickSerial;advance(.36)
+assert(not matchBall.possession and matchBall.kickSerial==passSerial,'recipient leaving selection cancels return')
+for _,invalidRecipient in ipairs({
+    function() other.dead=true end,
+    function() other.z=1 end,
+    function() M.players={p} end,
+    function() other.x=30 end,
+    function() other.x=3;other.y=0 end,
+    function() M.wall=function(a,b) return a.x~=b.x end end
+}) do
+    feedPass('other');passSerial=matchBall.kickSerial;invalidRecipient();advance(.36)
+    assert(not matchBall.possession and matchBall.kickSerial==passSerial,'invalid recipient or path fails closed instead of switching players')
+end
+M.wall=nil
+feedPass('other');advance(.36);passSerial=matchBall.kickSerial;matchBall.vx=0;matchBall.vy=0
+for i=1,12 do advance(.1) end
+assert(not matchBall.possession and matchBall.kickSerial==passSerial,'stopped return cannot self-recapture repeatedly')
+feedPass('other');passSerial=matchBall.kickSerial
+M.send(p,'reset',{id=2});advance(.5)
+assert(matchBall.kickSerial==passSerial and not matchBall.passerZoneBlocked,'reset cancels pending return and clears block')
+feedPass('other');passSerial=matchBall.kickSerial;matchBall.match.phase='goal';matchBall.match.resetAt=M.time/1000+2;advance(.4)
+assert(not matchBall.possession and matchBall.kickSerial==passSerial,'goal pause cancels pending return')
+feedPass('other');other.x=matchBall.x-.4;other.y=matchBall.y;passSerial=matchBall.kickSerial
+M.time=M.time+801;S.command(other,'tackle',{id=2,dx=1,dy=0});advance(.4)
+assert(heldBy(other) and matchBall.kickSerial==passSerial,'stealing passer cancels pending return')
+feedPass('other');matchBall.possession={kind='player',key=ownerKey};p.x=passer.x;p.y=0;advance(.01)
+assert(matchBall.possession.kind=='player','passer cannot steal player-held ball')
+feedPass('other');matchBall.possession=nil;matchBall.h=.5;advance(.01)
+assert(not matchBall.possession,'passer ignores airborne ball')
+resetTest();M.missing=function(x,y) return x==2 and y==0 end
+M.send(p,'configure',config)
+assert(not matchBall.match.testZones.passer,'invalid passer placement omitted rather than relocated')
+M.missing=nil
+matchBall.lastPlayerKicker='other';matchBall.kicker='other'
+M.send(p,'configure',config)
+assert(matchBall.lastPlayerKicker==nil,'reconfigure clears previous real feeder')
+feedPass(nil);matchBall.kicker='other';matchBall.possession=nil;advance(.01)
+-- Re-capture ignores stale animation metadata when no real feeder remains.
+assert(matchBall.possession.feeder==ownerKey,'stale kick animation cannot replace reset feeder identity')
+feedPass('disconnected-feeder')
+assert(matchBall.possession.feeder==nil,'invalid existing feeder never falls back to nearby owner')
+passSerial=matchBall.kickSerial;advance(.36)
+assert(matchBall.kickSerial==passSerial and not matchBall.possession,'missing stored feeder cancels pass')
+matchBall.lastPlayerKicker='other';M.send(p,'reset',{id=2})
+assert(matchBall.lastPlayerKicker==nil,'explicit reset clears feeder')
+matchBall.lastPlayerKicker='other';matchBall.match.phase='goal';matchBall.match.resetAt=M.time/1000+.1
+advance(.2)
+assert(matchBall.lastPlayerKicker==nil,'goal restart clears feeder')
+print('PASS pass-return zone recipient identity, current aim, endpoint, invalid recipients and lifecycle')

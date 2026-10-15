@@ -204,6 +204,9 @@ TEST.buttons={};TEST.queue={};local attempts=TEST.tackles or 0
 C.tackle()
 assert(TEST.tackles==attempts+1 and TEST.sent[#TEST.sent].command=='tackle','attempt animates before server success is known')
 assert(TEST.tackleDx==1 and TEST.tackleDy==0,'gesture receives cursor direction')
+local beforeRepeat=#TEST.sent;TEST.time=60801;C.tackle()
+assert(#TEST.sent==beforeRepeat and TEST.tackles==attempts+1,'active defense gesture blocks repeated invisible tackle after minimum cooldown')
+TEST.time=60000
 C.mouseDown();assert(not C.charge,'cannot charge kick during shoulder gesture')
 TEST.queue={setmetatable({},PS_TackleAction)};C.update(TEST.player)
 assert(C.controlId==1 and not C.blocked(),'owned shoulder gesture preserves possession and movement input')

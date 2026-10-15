@@ -41,5 +41,7 @@
   "UI_PS_TestZonesUnavailable": "빈 바닥을 찾지 못해 일부 테스트 구역을 배치하지 못했습니다. 열린 공간에 골대를 다시 지정하세요.",
   "UI_PS_Tackled": "태클당했습니다! 공 소유를 잃었습니다.",
   "UI_PS_ShooterZone": "B 슛 구역 · 공을 보내면 B 골문으로 자동 슛",
-  "UI_PS_ShooterPossession": "슛 구역이 공 소유 · B 골문으로 슛 준비"
+  "UI_PS_ShooterPossession": "슛 구역이 공 소유 · B 골문으로 슛 준비",
+  "UI_PS_PasserZone": "리턴 패스 구역 · 공을 보내면 내 쪽으로 패스",
+  "UI_PS_PasserPossession": "패스 구역이 공 소유 · 보낸 선수에게 패스 준비"
 }

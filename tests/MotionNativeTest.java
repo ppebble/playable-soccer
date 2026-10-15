@@ -90,7 +90,7 @@ public final class MotionNativeTest {
         if(nodeType.getField("useDeferredMovement").getBoolean(node) || nodeType.getField("deferredRotationScale").getFloat(node)!=0) throw new AssertionError("Strong kick cannot drive root motion");
         if(!((List<?>)nodeType.getField("events").get(node)).isEmpty()) throw new AssertionError("Strong kick must not trigger combat");
         Object values=vars.getConstructor().newInstance();
-        for(String name:new String[]{"PS_StrongKickGesture","PS_KickGesture","PS_PushTackle","Stomp","","Eat"}) {
+        for(String name:new String[]{"PS_StrongKickGesture","PS_KickGesture","PS_DefendTackle","Stomp","","Eat"}) {
             vars.getMethod("setVariable",String.class,String.class).invoke(values,"PerformingAction",name);
             boolean selected=(Boolean)nodeType.getMethod("checkConditions",source).invoke(node,values);
             if(selected!=name.equals("PS_StrongKickGesture")) throw new AssertionError("Strong kick action condition leaks");
@@ -133,9 +133,12 @@ public final class MotionNativeTest {
         Class<?> nodeType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimNode");
         Class<?> vars=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimationVariableSource");
         Class<?> source=Class.forName("zombie.core.skinnedmodel.advancedanimation.IAnimationVariableSource");
-        Path path=Path.of(mod,"media/AnimSets/player/actions/PS_PushTackle.xml");
+        Path path=Path.of(mod,"media/AnimSets/player/actions/PS_DefendTackle.xml");
         Object node=nodeType.getMethod("Parse",String.class).invoke(null,path.toString());
-        if(node==null || !"Bob_Shove".equals(nodeType.getField("animName").get(node))) throw new AssertionError("Native forward shove clip required");
+        if(node==null || !"Bob_BiteDefend".equals(nodeType.getField("animName").get(node))) throw new AssertionError("Native unarmed bite-defense clip required");
+        String nativeDefense=Files.readString(Path.of("media/AnimSets/player/hitreaction-bite/BiteDefended.xml"));
+        if(!nativeDefense.contains("<m_AnimName>Bob_BiteDefend</m_AnimName>") || !nativeDefense.contains("<m_Value>BiteDefended</m_Value>"))
+            throw new AssertionError("Installed automatic bite defense changed");
         Class<?> stateType=Class.forName("zombie.core.skinnedmodel.advancedanimation.AnimState");
         Object state=stateType.getConstructor().newInstance();
         try(var files=Files.list(Path.of("media/AnimSets/player/actions"))) {
@@ -150,12 +153,12 @@ public final class MotionNativeTest {
         Path stalePath=Files.createTempFile("ps-stale-tackle-",".xml");
         Object stale;
         try {
-            Files.writeString(stalePath,Files.readString(path).replace("PS_PushTackle","PS_ShoulderTackle").replace("Bob_Shove","Bob_IdleToSprint"));
+            Files.writeString(stalePath,Files.readString(path).replace("PS_DefendTackle","PS_PushTackle").replace("Bob_BiteDefend","Bob_Shove"));
             stale=nodeType.getMethod("Parse",String.class).invoke(null,stalePath.toString());
         } finally {Files.deleteIfExists(stalePath);}
         stateType.getMethod("addNode",nodeType).invoke(state,stale);
         Object liveValues=vars.getConstructor().newInstance();
-        vars.getMethod("setVariable",String.class,String.class).invoke(liveValues,"PerformingAction","PS_PushTackle");
+        vars.getMethod("setVariable",String.class,String.class).invoke(liveValues,"PerformingAction","PS_DefendTackle");
         for(boolean moving:new boolean[]{false,true}) {
             vars.getMethod("setVariable",String.class,boolean.class).invoke(liveValues,"isMoving",moving);
             List<?> selected=(List<?>)stateType.getMethod("getAnimNodes",source,List.class).invoke(state,liveValues,new ArrayList<>());
@@ -167,28 +170,28 @@ public final class MotionNativeTest {
         if(nodeType.getField("useDeferredMovement").getBoolean(node) || nodeType.getField("deferredRotationScale").getFloat(node)!=0) throw new AssertionError("Tackle cannot drive root motion/turning");
         if(!((List<?>)nodeType.getField("events").get(node)).isEmpty()) throw new AssertionError("Tackle gesture must not run bump/combat events");
         Object values=vars.getConstructor().newInstance();
-        for(String name:new String[]{"PS_PushTackle","PS_ShoulderTackle","PS_KickGesture","Shove","Stomp","","Eat"}) {
+        for(String name:new String[]{"PS_DefendTackle","PS_PushTackle","PS_ShoulderTackle","PS_KickGesture","Shove","BiteDefended","Stomp","","Eat"}) {
             vars.getMethod("setVariable",String.class,String.class).invoke(values,"PerformingAction",name);
             boolean selected=(Boolean)nodeType.getMethod("checkConditions",source).invoke(node,values);
-            if(selected!=name.equals("PS_PushTackle")) throw new AssertionError("Tackle action condition leaks");
+            if(selected!=name.equals("PS_DefendTackle")) throw new AssertionError("Tackle action condition leaks");
         }
         Set<String> bones=new HashSet<>();
         for(Object weight:(List<?>)nodeType.getField("subStateBoneWeights").get(node)) bones.add((String)weight.getClass().getField("boneName").get(weight));
         if(!bones.equals(Set.of("Bip01_Spine"))) throw new AssertionError("Tackle must preserve pelvis/root/leg locomotion");
-        String clip=Files.readString(Path.of("media/anims_X/Bob/Bob_Shove.x"));
+        String clip=Files.readString(Path.of("media/anims_X/Bob/Bob_BiteDefend.x"));
         if(!clip.contains("Frame Bip01_Spine")) throw new AssertionError("Native torso bone missing");
         var rate=java.util.regex.Pattern.compile("AnimTicksPerSecond\\s*\\{\\s*(\\d+);").matcher(clip);
-        if(!rate.find()) throw new AssertionError("Missing shove timing");
+        if(!rate.find()) throw new AssertionError("Missing bite-defense timing");
         var times=java.util.regex.Pattern.compile("(?m)^\\s*(\\d+);[34];").matcher(clip);
         int last=0;while(times.find()) last=Math.max(last,Integer.parseInt(times.group(1)));
         String xml=Files.readString(path);
-        if(!xml.contains("<m_SpeedScale>1.35</m_SpeedScale>") || !xml.contains("<m_BlendOutTime>0.10</m_BlendOutTime>")
+        if(!xml.contains("<m_SpeedScale>1.40</m_SpeedScale>") || !xml.contains("<m_BlendOutTime>0.10</m_BlendOutTime>")
             || !xml.contains("<m_BlendTime>0.08</m_BlendTime>")
-            || last/Double.parseDouble(rate.group(1))/1.35+0.10>18.0/30) throw new AssertionError("Tackle gesture timeout truncates clip");
+            || last/Double.parseDouble(rate.group(1))/1.40+0.10>41.0/30) throw new AssertionError("Tackle gesture timeout truncates clip");
         Class<?> player=Class.forName("zombie.characters.IsoPlayer");
         player.getMethod("faceLocation",float.class,float.class);
         player.getMethod("getX");player.getMethod("getY");
-        System.out.println("PASS native forward shove, torso-only mask, event-free conditions, blends and duration; silhouette untested");
+        System.out.println("PASS native automatic bite-defense clip, torso-only mask, event-free conditions, blends and duration; silhouette untested");
     }
     private static void verifyFall() throws Exception {
         Class<?> player=Class.forName("zombie.characters.IsoPlayer",false,MotionNativeTest.class.getClassLoader());
