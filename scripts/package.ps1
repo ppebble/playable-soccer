@@ -20,7 +20,7 @@ if(Test-Path -LiteralPath $target){
 Copy-Item -LiteralPath $source -Destination $target -Recurse
 $count=0
 foreach($file in Get-ChildItem $source -File -Recurse -Force){
-    $relative=[IO.Path]::GetRelativePath($source,$file.FullName)
+    $relative=$file.FullName.Substring($source.Length).TrimStart([IO.Path]::DirectorySeparatorChar,[IO.Path]::AltDirectorySeparatorChar)
     if((Get-FileHash -LiteralPath $file.FullName).Hash -ne (Get-FileHash -LiteralPath (Join-Path $target $relative)).Hash){throw "Hash mismatch: $relative"}
     $count++
 }

@@ -40,8 +40,8 @@ try {
     if($LASTEXITCODE -ne 0){throw 'Production Lua syntax failed'}
 } finally { Pop-Location }
 foreach($category in @('UI','ContextMenu','ItemName')) {
-    $en=Get-Content (Join-Path $mod "media/lua/shared/Translate/EN/$category.json") -Raw | ConvertFrom-Json
-    $ko=Get-Content (Join-Path $mod "media/lua/shared/Translate/KO/$category.json") -Raw | ConvertFrom-Json
+    $en=Get-Content (Join-Path $mod "media/lua/shared/Translate/EN/$category.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+    $ko=Get-Content (Join-Path $mod "media/lua/shared/Translate/KO/$category.json") -Raw -Encoding UTF8 | ConvertFrom-Json
     if(Compare-Object @($en.PSObject.Properties.Name) @($ko.PSObject.Properties.Name)){throw "Translation mismatch: $category"}
     foreach($property in $en.PSObject.Properties){if(-not $ko.($property.Name)){throw "Empty Korean translation: $($property.Name)"}}
 }
