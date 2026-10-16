@@ -54,7 +54,7 @@ end
 
 local M=PSMotion
 M.tackleDiagnosticCount=0
-print('[PlayableSoccer motion v0.5.12] intended PS_BasicPushTackle / Bob_Shove')
+print('[PlayableSoccer motion v0.5.13] intended PS_BasicPushTackle / Bob_Shove')
 local function tackleDiagnostic(id,phase,p,reason)
     if not id or id>5 then return end
     local ok,value=pcall(function() return p and p:getVariableString('PerformingAction') end)

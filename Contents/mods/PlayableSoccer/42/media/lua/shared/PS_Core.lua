@@ -25,10 +25,10 @@ C.restVerticalSpeed = .3 / C.tilesPerFloor
 function C.finite(n)
     return type(n)=='number' and n==n and n>-math.huge and n<math.huge
 end
-local function airDuration(height,vertical)
+local function airDuration(height,vertical,gravity)
     if height==0 and vertical==0 then return 0 end
-    local impact=math.sqrt(vertical*vertical+2*C.gravity*height)
-    local time=(vertical+impact)/C.gravity
+    local impact=math.sqrt(vertical*vertical+2*gravity*height)
+    local time=(vertical+impact)/gravity
     local rebound=impact*C.restitution
     while rebound>=C.restVerticalSpeed do
         time=time+2*rebound/C.gravity
@@ -55,13 +55,17 @@ function C.kick(b,dx,dy,power,lob)
     local distance=lob and (.65+(C.maxLobDistance-.65)*power^1.4) or (1.5+(C.maxDistance-1.5)*power)
     local peak=0
     if lob then peak=(.7+2.9*power)*.85
-    elseif power>=.8 then peak=.02+.13*(power-.8)/.2 end
-    local vertical=math.sqrt(2*C.gravity*peak)
-    local flight=airDuration(b.h,vertical)
+    elseif power>=.8 then peak=.02+.38*(power-.8)/.2 end
+    -- A driven shot uses a shallow, longer first flight. Rebounds return to
+    -- ordinary gravity so the ball does not float after touching the ground.
+    local gravity=(not lob and power>=.8) and C.gravity*.35 or C.gravity
+    local vertical=math.sqrt(2*gravity*peak)
+    local flight=airDuration(b.h,vertical,gravity)
     -- Stable positive root of distance = speed*flight + speed^2/(2*drag).
     local speed=2*distance/(flight+math.sqrt(flight*flight+2*distance/C.groundDrag))
     b.vx=dx/length*speed; b.vy=dy/length*speed; b.vz=vertical
     b.rollDrag=C.groundDrag
+    b.flightGravity=gravity~=C.gravity and gravity or nil
     return true
 end
 -- Resolve exact ground-impact times inside the existing bounded substep.
@@ -69,15 +73,16 @@ end
 local function verticalStep(b,dt)
     local remaining,air=dt,0
     while remaining>0 and (b.h>0 or b.vz~=0) do
-        local impact=math.sqrt(b.vz*b.vz+2*C.gravity*b.h)
-        local hit=(b.vz+impact)/C.gravity
+        local gravity=b.flightGravity or C.gravity
+        local impact=math.sqrt(b.vz*b.vz+2*gravity*b.h)
+        local hit=(b.vz+impact)/gravity
         if hit>remaining then
-            b.h=b.h+b.vz*remaining-.5*C.gravity*remaining*remaining
-            b.vz=b.vz-C.gravity*remaining
+            b.h=b.h+b.vz*remaining-.5*gravity*remaining*remaining
+            b.vz=b.vz-gravity*remaining
             air=air+remaining; remaining=0
         else
             air=air+hit; remaining=remaining-hit
-            b.h=0; b.vz=impact*C.restitution
+            b.h=0; b.vz=impact*C.restitution; b.flightGravity=nil
             if b.vz<C.restVerticalSpeed then b.vz=0 end
         end
     end

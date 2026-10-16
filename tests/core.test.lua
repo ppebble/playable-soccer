@@ -61,7 +61,7 @@ for _,dt in ipairs({.01,.05,.25}) do
                 C.step(shot,dt,nil,function(ball) peak=math.max(peak,ball.h) end)
             end
             local target=loft and (.65+27.35*power^1.4) or (1.5+22.42*power)
-            local targetPeak=loft and ((.7+2.9*power)*.85) or (power>=.8 and (.02+.13*(power-.8)/.2) or 0)
+            local targetPeak=loft and ((.7+2.9*power)*.85) or (power>=.8 and (.02+.38*(power-.8)/.2) or 0)
             assert(math.abs(shot.x-target)<.001,'charge must map to stopping distance independent of timestep/loft')
             assert(math.abs(peak-targetPeak)<.03,'loft peak must match intended world-floor height')
             assert(shot.vx==0 and shot.h==0 and shot.vz==0,'shots land and rest without deletion')
@@ -147,3 +147,24 @@ assert(C.chargePower(450)==1 and C.chargePower(900)==1,'full charge takes450ms a
 assert(C.possessionLead(0)==.4)
 assert(math.abs(C.possessionLead(4)-.4)<.000001)
 assert(math.abs(C.possessionLead(8)-.4)<.000001 and math.abs(C.possessionLead(12)-.4)<.000001)
+
+-- Driven left shots stay shallow over a long forward flight; right lob is unchanged.
+for _,dt in ipairs({.01,.05,.25}) do
+    local driven=C.newBall(0,0,0);C.kick(driven,1,0,1,false)
+    local initial=driven.vx;local descent=0;local apexX=0;local landedX
+    for i=1,math.ceil(8/dt) do
+        C.step(driven,dt,nil,function(ball)
+            if ball.flightGravity then
+                if ball.vz>=0 then apexX=ball.x else descent=descent+1 end
+                assert(math.abs(ball.vx-initial)<.000001,'forward momentum persists through driven descent')
+            elseif not landedX then landedX=ball.x end
+        end)
+    end
+    assert(descent>0 and apexX>5 and landedX>11,'driven shot floats forward instead of popping up nearby')
+    assert(math.abs(driven.x-23.92)<.001,'driven shot keeps its approved stopping distance')
+    assert(not driven.flightGravity,'normal gravity restored on first landing')
+end
+local rekick=C.newBall(0,0,0);C.kick(rekick,1,0,1,false)
+assert(rekick.flightGravity and C.kick(rekick,1,0,1,true) and not rekick.flightGravity,'lob clears driven-flight gravity')
+C.kick(rekick,1,0,1,false);C.kick(rekick,1,0,.5,false)
+assert(not rekick.flightGravity and rekick.vz==0,'ordinary pass clears driven-flight state')
