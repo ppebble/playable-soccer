@@ -298,6 +298,19 @@ local function tackle(p,b,args,t)
     if distance<=.8 then acquire(p,b,t) end
     return true
 end
+local function playerCapture(b,t,all)
+    if b.possession or b.h>1.35/C.tilesPerFloor then return false end
+    -- Protect a released ball briefly, but a fresh shot is immediately blockable
+    -- by other participants. Only its shooter keeps the reacquisition delay.
+    if b.captureAfter and t<b.captureAfter and not (b.shooterAfter and t<b.shooterAfter) then return false end
+    for _,p in ipairs(all) do
+        local key=owner(p)
+        if not (b.shooter==key and b.shooterAfter and t<b.shooterAfter)
+            and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=1.15^2 and participant(p,b,t)
+            and clearPath(b,p:getX(),p:getY(),b.x,b.y) and acquire(p,b,t) then return true end
+    end
+    return false
+end
 local function possessionTick(b,dt,t,all)
     if b.possession then
         if b.possession.kind=='zone' then
@@ -352,15 +365,9 @@ local function possessionTick(b,dt,t,all)
         return true
     end
     if zoneCapture(b,t) then return true end
-    if b.h~=0 or b.vz~=0 or b.vx^2+b.vy^2>16 or (b.captureAfter and t<b.captureAfter) then return false end
-    for _,p in ipairs(all) do
-        local key=owner(p)
-        if not (b.shooter==key and b.shooterAfter and t<b.shooterAfter)
-            and (p:getX()-b.x)^2+(p:getY()-b.y)^2<=.8^2 and participant(p,b,t)
-            and clearPath(b,p:getX(),p:getY(),b.x,b.y) and acquire(p,b,t) then return true end
-    end
-    return false
+    return playerCapture(b,t,all)
 end
+
 function S.command(p,command,args)
     if not p or not cooldown[command] then return end
     local connected=false
@@ -493,7 +500,7 @@ function S.tick()
             if not possessionTick(b,dt,t,all) then
                 C.step(b,dt,S.collision,function(ball,x,y,h)
                     if PSMatch.segment(ball,x,y,h,t) then release(ball,t);scored=true; return true end
-                    return zoneCapture(ball,t)
+                    return playerCapture(ball,t,all) or zoneCapture(ball,t)
                 end)
             elseif b.match and (b.match.phase=='goal' or b.match.phase=='finished') then scored=true end
         end

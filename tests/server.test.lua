@@ -239,10 +239,10 @@ resetTest();p.x=4.8;matchBall.x=5.2
 M.wall=function(a,b) return a.x~=b.x end
 register(p);advance(.01)
 assert(not matchBall.possession,'nearby pickup cannot cross wall')
-resetTest();register(p);matchBall.h=.01;matchBall.vz=1;advance(.01)
-assert(not matchBall.possession,'airborne loose ball not automatically picked up')
-matchBall.h=0;matchBall.vz=0;matchBall.vx=8;matchBall.x=p.x;advance(.01)
-assert(not matchBall.possession,'fast loose shot not automatically picked up')
+advance(.6);resetTest();register(p);matchBall.h=.01;matchBall.vz=1;advance(.01)
+assert(matchBall.possession and matchBall.possession.key==ownerKey,'low airborne ball is controllable')
+advance(.6);resetTest();register(p);matchBall.h=0;matchBall.vz=0;matchBall.vx=8;matchBall.x=p.x;advance(.01)
+assert(matchBall.possession and matchBall.possession.key==ownerKey,'fast loose shot is controllable')
 resetTest();register(p);register(other);advance(.01)
 matchBall.x=5.2;other.x=4.8
 M.wall=function(a,b) return a.x~=b.x end
@@ -261,6 +261,29 @@ assert(S.controls[ownerKey].id==3,'stale leave for previous ball cannot cancel n
 local prior=S.revision
 S.command(p,'control',{id=3,active=true})
 assert(S.revision==prior,'same-selection heartbeat does not broadcast redundant state')
+-- Reception is swept during flight, with height, range and ownership gates.
+local receptionMatch=matchBall.match
+local function reception()
+    advance(.7);resetTest();matchBall.match=nil
+    matchBall.possession=nil;matchBall.captureAfter=nil;matchBall.shooterAfter=nil
+    matchBall.x=2;matchBall.y=0;matchBall.h=.2;matchBall.vx=24;matchBall.vy=0;matchBall.vz=0
+    register(p)
+end
+reception();advance(.2)
+assert(matchBall.possession and matchBall.possession.key==ownerKey,'fast pass crossing player between ticks is trapped')
+assert(matchBall.vx==0 and matchBall.h==0,'reception stops and grounds ball')
+reception();p.y=1.3;advance(.2)
+assert(not matchBall.possession,'outside widened radius remains a miss')
+reception();matchBall.h=1;advance(.2)
+assert(not matchBall.possession,'high lob passes above reception height')
+reception();p.z=1;advance(.2)
+assert(not matchBall.possession,'different floor cannot receive')
+reception();S.controls={};advance(.2)
+assert(not matchBall.possession,'bystander does not intercept')
+reception();matchBall.x=5;matchBall.h=0;matchBall.vx=0;other.x=6;register(other)
+M.send(p,'kick',{id=2,dx=1,dy=0,power=.8});advance(.01)
+assert(heldBy(other),'defender can block immediately while shooter reacquisition is guarded')
+matchBall.match=receptionMatch
 print('PASS control transitions, single-ball ownership, wall and airborne pickup boundaries')
 
 -- Sustained running and network-style batched movement must not drop possession.
