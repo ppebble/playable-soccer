@@ -83,42 +83,26 @@ local option=menu.options.UI_PS_TeamB;option.fn(option.target)
 check(PSClient.selected==1 and TEST.commands[#TEST.commands].args.team=="B","team selection resumes controls")
 
 TEST.ball.match.phase="play"
-TEST.ball.match.testZones={tackle={x=1,y=3,r=1.25},keeper={x=9,y=3,r=1.25}}
-TEST.ball.possession={kind="zone",key="keeper"}
-TEST.texts={};TEST.draws={};PSHUD.render(TEST.panel,PSClient)
-local tackleZone,keeperZone,zoneOwner=false,false,false
-for _,entry in ipairs(TEST.texts) do
-    if entry.text=="UI_PS_TackleZone" then tackleZone=true end
-    if entry.text=="UI_PS_KeeperZone" then keeperZone=true end
-    if entry.text=="UI_PS_ZonePossession" then zoneOwner=true end
-end
-check(tackleZone and keeperZone and zoneOwner,"both world zones and simulated possession labeled")
-check(#TEST.draws>=98,"both zone perimeters rendered without interactive UI panels")
-TEST.ball.possession={kind="player",key="owner"};TEST.texts={}
+TEST.ball.possession={kind="player",key="owner"};TEST.texts={};TEST.draws={}
 PSHUD.render(TEST.panel,PSClient)
 local holder=false
 for _,entry in ipairs(TEST.texts) do if entry.text=="UI_PS_Possessionowner" then holder=true end end
 check(holder,"server holder name displayed")
-
-TEST.ball.match.testZones.shooter={x=8,y=4,r=.9}
-TEST.ball.possession={kind="zone",key="shooter"};TEST.texts={}
-PSHUD.render(TEST.panel,PSClient)
-local shotZone,shotOwner=false,false
-for _,entry in ipairs(TEST.texts) do
-    if entry.text=="UI_PS_ShooterZone" then shotZone=true end
-    if entry.text=="UI_PS_ShooterPossession" then shotOwner=true end
+local normalDraws=#TEST.draws
+-- Legacy development state cannot expose test decorations or virtual owners.
+TEST.ball.match.testZones={tackle={x=1,y=3,r=1.25},keeper={x=9,y=3,r=1.25},
+    shooter={x=8,y=4,r=.9},passer={x=2,y=0,r=.9}}
+for _,key in ipairs({"keeper","shooter","passer"}) do
+    TEST.ball.possession={kind="zone",key=key};TEST.texts={};TEST.draws={}
+    PSHUD.render(TEST.panel,PSClient)
+    local free=false
+    for _,entry in ipairs(TEST.texts) do
+        check(not string.find(entry.text,"Zone") and not string.find(entry.text,"Possession"),"no test zone or simulated owner label")
+        if entry.text=="UI_PS_FreeBall" then free=true end
+    end
+    check(free and #TEST.draws==normalDraws,"legacy zones add no decoration or virtual owner status")
 end
-check(shotZone and shotOwner,"goal B shot zone and pending shot labeled")
-
-TEST.ball.match.testZones.passer={x=2,y=0,r=.9}
-TEST.ball.possession={kind="zone",key="passer"};TEST.texts={}
-PSHUD.render(TEST.panel,PSClient)
-local passZone,passOwner=false,false
-for _,entry in ipairs(TEST.texts) do
-    if entry.text=="UI_PS_PasserZone" then passZone=true end
-    if entry.text=="UI_PS_PasserPossession" then passOwner=true end
-end
-check(passZone and passOwner,"return pass zone and receiving status labeled")
+TEST.ball.possession=nil
 
 -- Solo practice needs only one line and uses the captured starting position.
 TEST.commands={};TEST.ball.match=nil

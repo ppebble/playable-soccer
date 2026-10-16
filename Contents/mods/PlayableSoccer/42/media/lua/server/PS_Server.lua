@@ -171,130 +171,23 @@ local function knockDown(p,b,t)
     release(b,t)
     emit(p,'tackled',{id=b.id,serial=b.tackleSerial})
 end
-local function zonesFor(match,b)
-    local nx,ny=match.goals.A.nx,match.goals.A.ny
-    local zones={}
-    for _,spec in ipairs({{'tackle',-1},{'keeper',1}}) do
-        local x,y=match.center.x-ny*4*spec[2],match.center.y+nx*4*spec[2]
-        local clear=clearPoint(x,y,b.z) and clearPath(b,match.center.x,match.center.y,x,y)
-        for _,offset in ipairs({{.9,0},{-.9,0},{0,.9},{0,-.9}}) do
-            if not clearPoint(x+offset[1],y+offset[2],b.z) or not clearPath(b,x,y,x+offset[1],y+offset[2]) then clear=false end
-        end
-        if clear then zones[spec[1]]={x=x,y=y,r=.9} end
-    end
-    local goal=match.goals.B
-    local gx,gy=(goal.ax+goal.bx)/2,(goal.ay+goal.by)/2
-    local a=match.goals.A
-    local depth=((a.ax+a.bx)/2-gx)*goal.nx+((a.ay+a.by)/2-gy)*goal.ny
-    local inward=math.min(8,depth*.65)
-    -- Try the two wide flanks only. Never silently fall back to the center.
-    for _,side in ipairs({1,-1}) do
-        local x,y=gx+goal.nx*inward-goal.ny*5*side,gy+goal.ny*inward+goal.nx*5*side
-        local clear=clearPoint(x,y,b.z) and clearPath(b,match.center.x,match.center.y,x,y)
-            and clearPath(b,x,y,gx-goal.nx*.3,gy-goal.ny*.3)
-        for _,other in pairs(zones) do
-            if (x-other.x)^2+(y-other.y)^2<=(.9+other.r)^2 then clear=false end
-        end
-        for _,offset in ipairs({{.9,0},{-.9,0},{0,.9},{0,-.9}}) do
-            if not clearPoint(x+offset[1],y+offset[2],b.z) or not clearPath(b,x,y,x+offset[1],y+offset[2]) then clear=false end
-        end
-        if clear then zones.shooter={x=x,y=y,r=.9};break end
-    end
-    local x,y=((a.ax+a.bx)/2+match.center.x)/2,((a.ay+a.by)/2+match.center.y)/2
-    local clear=clearPoint(x,y,b.z) and clearPath(b,match.center.x,match.center.y,x,y)
-    for _,other in pairs(zones) do if (x-other.x)^2+(y-other.y)^2<=(.9+other.r)^2 then clear=false end end
-    for _,offset in ipairs({{.9,0},{-.9,0},{0,.9},{0,-.9}}) do
-        if not clearPoint(x+offset[1],y+offset[2],b.z) or not clearPath(b,x,y,x+offset[1],y+offset[2]) then clear=false end
-    end
-    if clear then zones.passer={x=x,y=y,r=.9} end
-    return zones
-end
-local function feeder(b,t)
-    local preferred=b.lastPlayerKicker
-    local fallback
-    for _,p in ipairs(players()) do
-        if participant(p,b,t) then
-            if owner(p)==preferred then return owner(p) end
-            if owner(p)==b.owner then fallback=owner(p) end
-        end
-    end
-    if not preferred then return fallback end
-end
-local function zoneCapture(b,t)
-    local zones=b.match and b.match.testZones
-    if not zones or b.match.phase~='play' then return false end
-    local shooter=zones.shooter
-    if shooter and (b.x-shooter.x)^2+(b.y-shooter.y)^2>(shooter.r+.1)^2 then b.shooterZoneBlocked=nil end
-    local passer=zones.passer
-    if passer and (b.x-passer.x)^2+(b.y-passer.y)^2>(passer.r+.1)^2 then b.passerZoneBlocked=nil end
-    for _,key in ipairs({'keeper','shooter','passer'}) do
-        local zone=zones[key]
-        if not b.possession and zone and b.h<=.12 and (not b.zoneGrace or t>=b.zoneGrace)
-            and (not b.captureAfter or t>=b.captureAfter)
-            and (key~='shooter' or not b.shooterZoneBlocked)
-            and (key~='passer' or not b.passerZoneBlocked)
-            and (b.x-zone.x)^2+(b.y-zone.y)^2<=zone.r^2
-            and clearPath(b,zone.x,zone.y,b.x,b.y) then
-            b.possession={kind='zone',key=key,shootAt=key~='keeper' and t+.35 or nil,feeder=key=='passer' and feeder(b,t) or nil}
-            b.h=0; b.vx=0; b.vy=0; b.vz=0
-            return true
-        end
-    end
-    return false
-end
-local function zonePass(b,t)
-    local recipientKey=b.possession and b.possession.feeder
-    b.passerZoneBlocked=true
-    local recipient
-    for _,p in ipairs(players()) do if owner(p)==recipientKey and participant(p,b,t) then recipient=p;break end end
-    if not recipient then release(b,t);return end
-    local dx,dy=recipient:getX()-b.x,recipient:getY()-b.y
-    local distance=math.sqrt(dx*dx+dy*dy)
-    local power=(distance-1.5)/(C.maxDistance-1.5)
-    if power<0 or power>.79 or not clearPath(b,b.x,b.y,recipient:getX(),recipient:getY()) then release(b,t);return end
-    if not C.kick(b,dx,dy,power,false) then release(b,t);return end
-    b.possession=nil;b.captureAfter=t+.35;b.zoneGrace=t+.6
-    b.kickSerial=(b.kickSerial or 0)+1;b.kicker='zone:passer';b.kickPower=power
-    b.kickDx=dx/distance;b.kickDy=dy/distance;b.lob=false;b.dribble=false
-end
-local function zoneShot(b,t)
-    local goal=b.match and b.match.goals.B
-    local zones=b.match and b.match.testZones
-    if not goal or not zones or not zones.shooter then release(b,t);return end
-    local gx,gy=(goal.ax+goal.bx)/2,(goal.ay+goal.by)/2
-    local dx,dy=gx-b.x,gy-b.y;local distance=math.sqrt(dx*dx+dy*dy)
-    b.shooterZoneBlocked=true
-    if distance<.01 or not clearPath(b,b.x,b.y,gx-goal.nx*.3,gy-goal.ny*.3) then release(b,t);return end
-    local power=math.max(0,math.min(.79,(distance+1-1.5)/(C.maxDistance-1.5)))
-    if not C.kick(b,dx,dy,power,false) then release(b,t);return end
-    b.possession=nil;b.captureAfter=t+.35;b.zoneGrace=t+.6
-    b.kickSerial=(b.kickSerial or 0)+1;b.kicker='zone:shooter'
-    b.kickPower=power
-    b.kickDx=dx/distance;b.kickDy=dy/distance;b.lob=false;b.dribble=false
-end
 local function tackle(p,b,args,t)
-    if not participant(p,b,t) or not b.possession or b.h>.12 then return false end
+    if not participant(p,b,t) or not b.possession or b.possession.kind~='player' or b.h>.12 then return false end
     if not C.finite(args.dx) or not C.finite(args.dy) or math.abs(args.dx)>1 or math.abs(args.dy)>1 then return false end
     local length=math.sqrt(args.dx^2+args.dy^2)
     if length<.001 then return false end
     local dx,dy=b.x-p:getX(),b.y-p:getY(); local distance=math.sqrt(dx*dx+dy*dy)
     if distance>1.4 or (distance>.01 and (dx*args.dx+dy*args.dy)/(distance*length)<.5)
         or not clearPath(b,p:getX(),p:getY(),b.x,b.y) then return false end
-    if b.possession.kind=='player' then
-        if b.possession.key==owner(p) then return false end
-        local teams=b.match and b.match.teams
-        if teams and teams[owner(p)] and teams[owner(p)]==teams[b.possession.key] then return false end
-        local victim
-        for _,other in ipairs(players()) do if owner(other)==b.possession.key then victim=other end end
-        if not victim then release(b,t); return false end
-        if (victim:getX()-p:getX())^2+(victim:getY()-p:getY())^2>1.8^2
-            or not clearPath(b,p:getX(),p:getY(),victim:getX(),victim:getY()) then return false end
-        knockDown(victim,b,t)
-    else
-        if b.possession.key=='shooter' then b.shooterZoneBlocked=true end
-        if b.possession.key=='passer' then b.passerZoneBlocked=true end
-        release(b,t); b.zoneGrace=t+.6
-    end
+    if b.possession.key==owner(p) then return false end
+    local teams=b.match and b.match.teams
+    if teams and teams[owner(p)] and teams[owner(p)]==teams[b.possession.key] then return false end
+    local victim
+    for _,other in ipairs(players()) do if owner(other)==b.possession.key then victim=other end end
+    if not victim then release(b,t); return false end
+    if (victim:getX()-p:getX())^2+(victim:getY()-p:getY())^2>1.8^2
+        or not clearPath(b,p:getX(),p:getY(),victim:getX(),victim:getY()) then return false end
+    knockDown(victim,b,t)
     if distance<=.8 then acquire(p,b,t) end
     return true
 end
@@ -313,11 +206,7 @@ local function playerCapture(b,t,all)
 end
 local function possessionTick(b,dt,t,all)
     if b.possession then
-        if b.possession.kind=='zone' then
-            if b.possession.key=='shooter' and t>=b.possession.shootAt then zoneShot(b,t) end
-            if b.possession and b.possession.key=='passer' and t>=b.possession.shootAt then zonePass(b,t) end
-            return true
-        end
+        if b.possession.kind~='player' then release(b,t);return true end
         local holder
         for _,p in ipairs(all) do if owner(p)==b.possession.key then holder=p end end
         if not holder or not participant(holder,b,t) then release(b,t);return true end
@@ -333,9 +222,6 @@ local function possessionTick(b,dt,t,all)
             possession.lagSince=possession.lagSince or t
             if t-possession.lagSince>.75 then release(b,t);return true end
         else possession.lagSince=nil end
-        local zone=b.match and b.match.testZones and b.match.testZones.tackle
-        if zone and (holder:getX()-zone.x)^2+(holder:getY()-zone.y)^2<=zone.r^2
-            and clearPath(b,holder:getX(),holder:getY(),zone.x,zone.y) then knockDown(holder,b,t);return true end
         local motion=S.motion[owner(holder)]
         -- A single speed-estimate spike is not a loss of control. Separation,
         -- grace expiry and swept collision checks remain the hard boundaries.
@@ -364,7 +250,6 @@ local function possessionTick(b,dt,t,all)
         if PSMatch.segment(b,x,y,0,t) then release(b,t) end
         return true
     end
-    if zoneCapture(b,t) then return true end
     return playerCapture(b,t,all)
 end
 
@@ -431,10 +316,8 @@ function S.command(p,command,args)
             if (point.x-p:getX())^2+(point.y-p:getY())^2>1600 then invalid(); return end
         end
         if not clearPoint(match.center.x,match.center.y,b.z) then invalid(); return end
-        match.teams[key]='A'; b.match=match;b.lastPlayerKicker=nil;b.shooterZoneBlocked=nil;b.passerZoneBlocked=nil;release(b,t); PSMatch.reset(b)
-        if match.mode~='practice' then match.testZones=zonesFor(match,b) end
+        match.teams[key]='A'; b.match=match;release(b,t); PSMatch.reset(b)
         emit(p,'notice',{key=match.mode=='practice' and 'UI_PS_PracticeReady' or 'UI_PS_GoalsReady'})
-        if match.testZones and (not match.testZones.tackle or not match.testZones.keeper or not match.testZones.shooter or not match.testZones.passer) then emit(p,'notice',{key='UI_PS_TestZonesUnavailable'}) end
     elseif command=='reset' or command=='restart' then
         local b=integer(args.id) and S.balls[args.id]
         if not b or b.owner~=key or p:getZ()~=b.z then return end
@@ -442,9 +325,6 @@ function S.command(p,command,args)
         local center=b.match and b.match.center or b.spawn
         if not center or not clearPoint(center.x,center.y,b.z) then return end
         release(b,t)
-        b.shooterZoneBlocked=nil
-        b.passerZoneBlocked=nil
-        b.lastPlayerKicker=nil
         if command=='restart' then PSMatch.restart(b)
         elseif b.match then PSMatch.reset(b)
         else b.x=center.x;b.y=center.y;b.h=0;b.vx=0;b.vy=0;b.vz=0 end
@@ -470,7 +350,7 @@ function S.command(p,command,args)
         addXp(p,Perks.Strength,1);addXp(p,Perks.Aiming,1)
         b.possession=nil;b.captureAfter=t+.35;b.shooter=key;b.shooterAfter=t+.6
         local length=math.sqrt(args.dx^2+args.dy^2)
-        b.kickSerial=(b.kickSerial or 0)+1;b.kicker=key;b.lastPlayerKicker=key
+        b.kickSerial=(b.kickSerial or 0)+1;b.kicker=key
         b.kickDx=args.dx/length;b.kickDy=args.dy/length;b.kickPower=args.power;b.lob=args.lob==true;b.dribble=false
     end
     publishAll()
@@ -495,12 +375,12 @@ function S.tick()
             release(b,t)
         elseif b.match and b.match.phase=='goal' then
             if b.possession then release(b,t) end
-            if t>=b.match.resetAt and clearPoint(b.match.center.x,b.match.center.y,b.z) then release(b,t);b.lastPlayerKicker=nil;b.shooterZoneBlocked=nil;b.passerZoneBlocked=nil;PSMatch.reset(b) end
+            if t>=b.match.resetAt and clearPoint(b.match.center.x,b.match.center.y,b.z) then release(b,t);PSMatch.reset(b) end
         else
             if not possessionTick(b,dt,t,all) then
                 C.step(b,dt,S.collision,function(ball,x,y,h)
                     if PSMatch.segment(ball,x,y,h,t) then release(ball,t);scored=true; return true end
-                    return playerCapture(ball,t,all) or zoneCapture(ball,t)
+                    return playerCapture(ball,t,all)
                 end)
             elseif b.match and (b.match.phase=='goal' or b.match.phase=='finished') then scored=true end
         end

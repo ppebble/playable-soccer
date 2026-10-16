@@ -46,3 +46,5 @@ foreach($category in @('UI','ContextMenu','ItemName')) {
     foreach($property in $en.PSObject.Properties){if(-not $ko.($property.Name)){throw "Empty Korean translation: $($property.Name)"}}
 }
 Write-Output 'PASS soccer source checks and translation parity; not live gameplay proof'
+
+& (Join-Path $PSScriptRoot "check-release.ps1")

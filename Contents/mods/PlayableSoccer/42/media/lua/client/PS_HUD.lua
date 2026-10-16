@@ -18,20 +18,6 @@ local function line(panel,g,z,r,b)
         if x then panel:drawRect(x-1,y-1,3,3,.7,r,.6,b) end
     end
 end
-local function testZone(panel,zone,z,label,red,green,blue)
-    if not zone then return end
-    -- Use the same world-space radius as the authoritative contact check.
-    for i=0,47 do
-        local angle=i*math.pi*2/48
-        local x,y=project(zone.x+math.cos(angle)*zone.r,zone.y+math.sin(angle)*zone.r,z)
-        if x then panel:drawRect(x-1,y-1,3,3,.85,red,green,blue) end
-    end
-    local x,y=project(zone.x,zone.y,z)
-    if x then
-        panel:drawRect(x-3,y-3,6,6,.85,red,green,blue)
-        panel:drawTextCentre(getText(label),x,y-24,red,green,blue,1,UIFont.Small)
-    end
-end
 function H.render(panel,C)
     local cx=getCore():getScreenWidth()/2
     local selected=C.ball(C.selected)
@@ -55,11 +41,8 @@ function H.render(panel,C)
         panel:drawProgressBar(cx-barWidth/2,95,barWidth,18,power,color)
         local possession=selected.possession
         local label=getText("UI_PS_FreeBall")
-        if possession then
-            local zoneLabel="UI_PS_ZonePossession"
-            if possession.key=="shooter" then zoneLabel="UI_PS_ShooterPossession"
-            elseif possession.key=="passer" then zoneLabel="UI_PS_PasserPossession" end
-            label=possession.kind=="zone" and getText(zoneLabel) or getText("UI_PS_Possession",possession.key)
+        if possession and possession.kind=="player" then
+            label=getText("UI_PS_Possession",possession.key)
         end
         if C.charge then
             local kind=C.charge.lob and "UI_PS_Lob" or (power>=.8 and "UI_PS_LowShot" or "UI_PS_Ground")
@@ -85,11 +68,6 @@ function H.render(panel,C)
     if not p then return end
     for _,b in pairs(C.state.balls or {}) do
         if b.match and math.floor(p:getZ())==b.z then
-            local zones=b.match.testZones or {}
-            testZone(panel,zones.tackle,b.z,"UI_PS_TackleZone",1,.45,.2)
-            testZone(panel,zones.keeper,b.z,"UI_PS_KeeperZone",.3,.8,1)
-            testZone(panel,zones.shooter,b.z,"UI_PS_ShooterZone",.85,.4,1)
-            testZone(panel,zones.passer,b.z,"UI_PS_PasserZone",.3,1,.45)
             for team,g in pairs(b.match.goals or {}) do
                 local red=team=="A" and .25 or 1
                 local blue=team=="A" and 1 or .25

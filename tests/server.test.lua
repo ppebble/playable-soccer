@@ -186,35 +186,25 @@ M.send(other,'tackle',{id=2,dx=1,dy=0});assert(matchBall.possession.key==ownerKe
 matchBall.match.teams.other='B'
 resetTest();register(p);advance(.01);other.x=matchBall.x-.4
 M.send(other,'tackle',{id=2,dx=1,dy=0});assert(matchBall.possession.key==ownerKey,'unregistered bystander cannot tackle')
--- Configure creates independent clear test circles and reports unavailable sites.
+-- Release builds create no scripted receivers or automatic tackle areas.
 resetTest();M.send(p,'configure',config)
-local zones=matchBall.match.testZones
-assert(zones.tackle and zones.keeper and zones.tackle.r==.9)
-local keeper=zones.keeper
-advance(.4) -- Configuration/reset capture grace expires before the incoming pass.
-matchBall.x=keeper.x-.8;matchBall.y=keeper.y;matchBall.h=0;matchBall.vx=8;matchBall.vy=0
-advance(.01)
-assert(matchBall.possession and matchBall.possession.kind=='zone','keeper captures incoming loose pass even above player pickup speed')
-local captureX=matchBall.x;advance(.1);assert(matchBall.x==captureX,'keeper capture never teleports to center')
-other.x=matchBall.x-.4;other.y=matchBall.y;register(other)
-M.send(other,'tackle',{id=2,dx=1,dy=0})
-assert(heldBy(other),'registered player can steal from keeper zone')
--- Wait past steal grace while still inside the keeper circle, then shoot out.
-advance(.65)
-assert(heldBy(other),'keeper does not take a held ball after steal grace')
-local shotX=matchBall.x
-M.send(other,'kick',{id=2,dx=1,dy=0,power=0})
-assert(not matchBall.possession,'keeper holder can release a shot')
-advance(.1)
-assert(not matchBall.possession and matchBall.x>shotX,'shot travels inside keeper zone during global capture grace')
-advance(.2)
-assert(not matchBall.possession,'keeper respects entire shot capture grace')
+assert(matchBall.match.testZones==nil,'match setup contains no test zones')
+for _,point in ipairs({{5,-4},{5,4},{3.5,-5},{2.5,0}}) do
+    S.controls={};matchBall.possession=nil;matchBall.captureAfter=nil
+    matchBall.x=point[1];matchBall.y=point[2];matchBall.h=0;matchBall.vx=0;matchBall.vy=0;matchBall.vz=0
+    local before=matchBall.kickSerial
+    advance(.8)
+    assert(not matchBall.possession and matchBall.kickSerial==before,'former test sites cannot receive or shoot')
+end
 resetTest();register(p);advance(.01)
-local tackleZone=matchBall.match.testZones.tackle
--- Move a carried ball and holder into the test area without a remote follow.
-p.x=tackleZone.x;p.y=tackleZone.y;matchBall.x=p.x+.1;matchBall.y=p.y;S.motion={}
+p.x=5;p.y=-4;matchBall.x=p.x+.1;matchBall.y=p.y;S.motion={}
 advance(.05)
-assert(not matchBall.possession and S.stunned[ownerKey]>M.time/1000,'tackle zone knocks down entering holder')
+assert(matchBall.possession and matchBall.possession.key==ownerKey and not S.stunned[ownerKey],'former tackle site cannot knock down holder')
+-- Unknown stale possession is released, never treated as an automated player.
+matchBall.possession={kind='zone',key='shooter',shootAt=0}
+S.controls={};local before=matchBall.kickSerial
+advance(.01)
+assert(not matchBall.possession and matchBall.kickSerial==before,'stale test possession safely releases without shooting')
 resetTest();register(p);advance(.01);M.send(p,'reset',{id=2})
 assert(not matchBall.possession and matchBall.x==5,'reset clears possession')
 resetTest();register(p);advance(.01)
@@ -222,14 +212,7 @@ p.x=9.8;p.y=0;matchBall.x=9.8;matchBall.y=0;S.motion={}
 advance(.1)
 assert(matchBall.match.phase=='goal' and not matchBall.possession,'carried goal uses swept scoring and clears possession')
 advance(2.1);assert(matchBall.x==5 and not matchBall.possession,'goal restart remains loose with grace')
-resetTest();M.missing=function(x,y) return y>=3 end
-M.send(p,'configure',config)
-assert(matchBall.match.testZones.tackle and not matchBall.match.testZones.keeper,'unavailable keeper zone omitted independently')
-local unavailable=false
-for _,packet in ipairs(M.packets) do if packet.command=='notice' and packet.args.key=='UI_PS_TestZonesUnavailable' then unavailable=true end end
-assert(unavailable,'zone placement failure is communicated')
-M.missing=nil
-print('PASS possession participation, follow, shot release, tackle, stun and test zones')
+print('PASS possession participation, follow, shot release, tackle, stun and release-only setup')
 resetTest();S.command(p,'control',{id=2,active=true});advance(.01)
 assert(matchBall.possession)
 S.command(p,'control',{id=2,active=false})
@@ -289,7 +272,7 @@ print('PASS control transitions, single-ball ownership, wall and airborne pickup
 -- Sustained running and network-style batched movement must not drop possession.
 local function beginFollowTest()
     resetTest();register(p);advance(.01)
-    matchBall.match=nil -- keep the running fixture out of goals and test zones
+    matchBall.match=nil -- keep the running fixture out of goals
 end
 local originalMatch=matchBall.match
 for _,speed in ipairs({4,8,12}) do
@@ -367,160 +350,6 @@ matchBall.x=p.x+1.8;matchBall.y=p.y;matchBall.h=0
 leadSerial=matchBall.kickSerial
 M.send(p,'kick',{id=2,dx=1,dy=0,power=.5})
 assert(matchBall.kickSerial==leadSerial,'loose ball retains original kick reach')
-resetTest();M.send(p,'configure',config);advance(.4)
-local shooter=matchBall.match.testZones.shooter
-assert(shooter and shooter.x==3.5 and shooter.y==-5 and shooter.r==.9,'shooter is deep and wide relative to goal B')
-local function feedShooter(height)
-    S.controls={};matchBall.possession=nil;matchBall.captureAfter=nil;matchBall.zoneGrace=nil;matchBall.shooterZoneBlocked=nil
-    matchBall.x=shooter.x;matchBall.y=shooter.y;matchBall.h=height or 0;matchBall.vz=0;matchBall.vx=0;matchBall.vy=0
-    matchBall.match.phase='play'
-    advance(.01)
-end
-local zoneXp=(p.xp and p.xp.Strength or 0)+(other.xp and other.xp.Strength or 0)
-feedShooter(0)
-assert(matchBall.possession and matchBall.possession.key=='shooter','loose low pass is received')
-local receiveX=matchBall.x;local autoSerial=matchBall.kickSerial
-advance(.2)
-assert(matchBall.possession and matchBall.x==receiveX,'receiver visibly holds before shooting')
-advance(.16)
-assert(not matchBall.possession and matchBall.kickSerial==autoSerial+1 and matchBall.vx>0 and matchBall.vy>0 and matchBall.vz==0,'automatic ground shot aims diagonally at goal B center')
-assert(math.abs(matchBall.vy/matchBall.vx-(0-shooter.y)/(10-shooter.x))<.00001,'shot direction uses goal-center vector')
-assert(matchBall.kicker=='zone:shooter')
-assert((p.xp and p.xp.Strength or 0)+(other.xp and other.xp.Strength or 0)==zoneXp,'automatic shot grants no player XP')
-local score=matchBall.match.scoreA
-for i=1,100 do advance(.02);if matchBall.match.phase=='goal' then break end end
-assert(matchBall.match.scoreA==score+1 and matchBall.match.phase=='goal','receiver shot scores through normal goal authority')
-advance(2.1);assert(not matchBall.possession and not matchBall.shooterZoneBlocked,'goal reset clears receiver state')
-feedShooter(.5)
-assert(not matchBall.possession,'receiver ignores airborne pass above low capture height')
-feedShooter(0);matchBall.possession={kind='player',key=ownerKey};p.x=shooter.x;p.y=shooter.y
-S.controls[ownerKey]={id=2,at=M.time/1000};S.motion={}
-advance(.01)
-assert(matchBall.possession and matchBall.possession.kind=='player','receiver never steals player-held ball')
-feedShooter(0);autoSerial=matchBall.kickSerial
-M.wall=function(a,b) return (a.x<8 and b.x>=8) or (b.x<8 and a.x>=8) end
-advance(.4)
-assert(not matchBall.possession and matchBall.kickSerial==autoSerial,'new obstacle cancels automatic shot')
-for i=1,20 do advance(.1) end
-assert(not matchBall.possession and matchBall.kickSerial==autoSerial,'blocked shot cannot loop into repeated recapture')
-M.wall=nil
-feedShooter(0);advance(.36);autoSerial=matchBall.kickSerial
-matchBall.vx=0;matchBall.vy=0
-for i=1,10 do advance(.1) end
-assert(not matchBall.possession and matchBall.kickSerial==autoSerial,'own shot stopped inside receiver cannot auto-fire repeatedly after grace')
-feedShooter(0);autoSerial=matchBall.kickSerial
-matchBall.match.phase='goal';matchBall.match.resetAt=M.time/1000+2
-advance(.5)
-assert(not matchBall.possession and matchBall.kickSerial==autoSerial,'goal phase cancels pending receiver shot')
-feedShooter(0);autoSerial=matchBall.kickSerial;M.send(p,'reset',{id=2});advance(.5)
-assert(not matchBall.possession and matchBall.kickSerial==autoSerial,'reset cancels pending automatic shot')
-feedShooter(0);other.x=matchBall.x-.4;other.y=matchBall.y;S.controls.other={id=2,at=M.time/1000}
-M.time=M.time+801;S.command(other,'tackle',{id=2,dx=1,dy=0})
-assert(heldBy(other),'receiver possession can be stolen with normal zone tackle')
-autoSerial=matchBall.kickSerial;advance(.4)
-assert(matchBall.kickSerial==autoSerial,'stolen receiver never fires old timer')
-resetTest();M.wall=function(a,b) return (a.x<8 and b.x>=8) or (b.x<8 and a.x>=8) end
-M.send(p,'configure',config)
-assert(not matchBall.match.testZones.shooter and matchBall.match.testZones.keeper and matchBall.match.testZones.tackle,'blocked shot path omits only receiver zone')
-M.wall=nil;M.missing=function(x,y) return x==3 and (y==-5 or y==5) end
-M.send(p,'configure',config)
-assert(not matchBall.match.testZones.shooter,'unloaded receiver placement omitted')
-M.missing=nil
-print('PASS automatic receiver hold, goal shot, grace, stealing, reset and blocked paths')
-M.missing=function(x,y) return x==3 and y==-5 end
-M.send(p,'configure',config)
-assert(matchBall.match.testZones.shooter.y==5,'blocked first flank tries opposite flank')
-M.missing=nil
-local shifted={id=2,goalA=config.goalA,goalB=config.goalB,center={x=5,y=-1}}
-M.send(p,'configure',shifted)
-assert(matchBall.match.testZones.shooter.y==5,'overlap with tackle circle uses opposite flank')
-local rotated={id=2,goalA={ax=-2,ay=0,bx=2,by=0},goalB={ax=-2,ay=10,bx=2,by=10},center={x=0,y=5}}
-p.x=0;p.y=5
-M.send(p,'configure',rotated)
-local rotatedZone=matchBall.match.testZones.shooter
-assert(rotatedZone and rotatedZone.x==5 and rotatedZone.y==3.5,'flank placement rotates with goal normals')
-local longPitch={id=2,goalA={ax=0,ay=-2,bx=0,by=2},goalB={ax=20,ay=-2,bx=20,by=2},center={x=10,y=0}}
-p.x=10;p.y=0
-M.send(p,'configure',longPitch)
-local far=matchBall.match.testZones.shooter
-assert(far and far.x==12 and math.abs(far.y)==5,'large pitch uses eight-tile inward cap and five-tile flank')
-assert(math.abs(math.sqrt((far.x-20)^2+far.y^2)-math.sqrt(89))<.00001,'large-pitch shooter is about9.4tiles from goal')
-resetTest();M.send(p,'configure',config);advance(.4)
-local passer=matchBall.match.testZones.passer
-assert(passer and passer.x==2.5 and passer.y==0 and passer.r==.9,'passer lies between A midpoint and match center')
-local function feedPass(lastKey)
-    M.wall=nil;M.players={p,other};p.dead=false;p.z=0;p.onFloor=false;p.stateName=nil;p.x=5;p.y=0
-    other.dead=false;other.z=0;other.x=6;other.y=1;other.onFloor=false
-    S.stunned={};S.motion={}
-    S.controls={[ownerKey]={id=2,at=M.time/1000},other={id=2,at=M.time/1000}}
-    matchBall.match.phase='play';matchBall.possession=nil;matchBall.captureAfter=nil;matchBall.zoneGrace=nil
-    matchBall.passerZoneBlocked=nil;matchBall.lastPlayerKicker=lastKey;matchBall.kicker='zone:shooter'
-    matchBall.x=passer.x;matchBall.y=passer.y;matchBall.h=0;matchBall.vx=0;matchBall.vy=0;matchBall.vz=0
-    advance(.01)
-end
-zoneXp=(p.xp and p.xp.Strength or 0)+(other.xp and other.xp.Strength or 0)
-feedPass('other')
-assert(matchBall.possession and matchBall.possession.key=='passer' and matchBall.possession.feeder=='other','passer remembers real feeder rather than latest automated kicker or nearby owner')
-local passSerial=matchBall.kickSerial
-advance(.2);assert(matchBall.possession and matchBall.kickSerial==passSerial,'passer visibly holds')
-other.y=2;advance(.16)
-assert(not matchBall.possession and matchBall.kicker=='zone:passer' and matchBall.kickSerial==passSerial+1 and matchBall.vz==0)
-assert((p.xp and p.xp.Strength or 0)+(other.xp and other.xp.Strength or 0)==zoneXp,'automatic pass grants no player XP')
-assert(math.abs(matchBall.vy/matchBall.vx-2/3.5)<.00001,'return aims at feeder current release position')
-other.x=9;other.y=3;S.controls={}
-for i=1,100 do advance(.025) end
-assert(math.abs(matchBall.x-6)<.001 and math.abs(matchBall.y-2)<.001,'pass stops at sampled recipient location without homing')
-feedPass(nil);assert(matchBall.possession.feeder==ownerKey,'solo fallback targets registered owner only')
-S.controls[ownerKey]=nil;passSerial=matchBall.kickSerial;advance(.36)
-assert(not matchBall.possession and matchBall.kickSerial==passSerial,'recipient leaving selection cancels return')
-for _,invalidRecipient in ipairs({
-    function() other.dead=true end,
-    function() other.z=1 end,
-    function() M.players={p} end,
-    function() other.x=30 end,
-    function() other.x=3;other.y=0 end,
-    function() M.wall=function(a,b) return a.x~=b.x end end
-}) do
-    feedPass('other');passSerial=matchBall.kickSerial;invalidRecipient();advance(.36)
-    assert(not matchBall.possession and matchBall.kickSerial==passSerial,'invalid recipient or path fails closed instead of switching players')
-end
-M.wall=nil
-feedPass('other');advance(.36);passSerial=matchBall.kickSerial;matchBall.vx=0;matchBall.vy=0
-for i=1,12 do advance(.1) end
-assert(not matchBall.possession and matchBall.kickSerial==passSerial,'stopped return cannot self-recapture repeatedly')
-feedPass('other');passSerial=matchBall.kickSerial
-M.send(p,'reset',{id=2});advance(.5)
-assert(matchBall.kickSerial==passSerial and not matchBall.passerZoneBlocked,'reset cancels pending return and clears block')
-feedPass('other');passSerial=matchBall.kickSerial;matchBall.match.phase='goal';matchBall.match.resetAt=M.time/1000+2;advance(.4)
-assert(not matchBall.possession and matchBall.kickSerial==passSerial,'goal pause cancels pending return')
-feedPass('other');other.x=matchBall.x-.4;other.y=matchBall.y;passSerial=matchBall.kickSerial
-M.time=M.time+801;S.command(other,'tackle',{id=2,dx=1,dy=0});advance(.4)
-assert(heldBy(other) and matchBall.kickSerial==passSerial,'stealing passer cancels pending return')
-feedPass('other');matchBall.possession={kind='player',key=ownerKey};p.x=passer.x;p.y=0;advance(.01)
-assert(matchBall.possession.kind=='player','passer cannot steal player-held ball')
-feedPass('other');matchBall.possession=nil;matchBall.h=.5;advance(.01)
-assert(not matchBall.possession,'passer ignores airborne ball')
-resetTest();M.missing=function(x,y) return x==2 and y==0 end
-M.send(p,'configure',config)
-assert(not matchBall.match.testZones.passer,'invalid passer placement omitted rather than relocated')
-M.missing=nil
-matchBall.lastPlayerKicker='other';matchBall.kicker='other'
-M.send(p,'configure',config)
-assert(matchBall.lastPlayerKicker==nil,'reconfigure clears previous real feeder')
-feedPass(nil);matchBall.kicker='other';matchBall.possession=nil;advance(.01)
--- Re-capture ignores stale animation metadata when no real feeder remains.
-assert(matchBall.possession.feeder==ownerKey,'stale kick animation cannot replace reset feeder identity')
-feedPass('disconnected-feeder')
-assert(matchBall.possession.feeder==nil,'invalid existing feeder never falls back to nearby owner')
-passSerial=matchBall.kickSerial;advance(.36)
-assert(matchBall.kickSerial==passSerial and not matchBall.possession,'missing stored feeder cancels pass')
-matchBall.lastPlayerKicker='other';M.send(p,'reset',{id=2})
-assert(matchBall.lastPlayerKicker==nil,'explicit reset clears feeder')
-matchBall.lastPlayerKicker='other';matchBall.match.phase='goal';matchBall.match.resetAt=M.time/1000+.1
-advance(.2)
-assert(matchBall.lastPlayerKicker==nil,'goal restart clears feeder')
-print('PASS pass-return zone recipient identity, current aim, endpoint, invalid recipients and lifecycle')
-
 -- Isolated single-goal practice, XP, and finished-match authority.
 M.wall=nil;M.missing=nil;M.unloaded=nil;M.squares={};M.players={p,other}
 p.name='owner';p.x=5;p.y=0;p.z=0;p.dead=false;p.onFloor=false;p.knockedDown=false;p.vehicle=nil

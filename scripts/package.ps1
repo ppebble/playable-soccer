@@ -2,6 +2,7 @@ param([switch]$Install,[string]$ModsPath=(Join-Path $env:USERPROFILE 'Zomboid/mo
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 $source=Join-Path $repo 'Contents/mods/PlayableSoccer'
+& (Join-Path $PSScriptRoot 'check-release.ps1') -ModRoot $source
 $base=if($Install){[IO.Path]::GetFullPath($ModsPath)}else{Join-Path $repo '.stage/Contents/mods'}
 if($base -match '(?i)steamapps[\\/]workshop'){throw 'Workshop content is read-only'}
 New-Item -ItemType Directory -Force $base | Out-Null

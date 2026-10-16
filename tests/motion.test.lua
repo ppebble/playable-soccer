@@ -1,3 +1,4 @@
+assert(#MOTION_LOGS==0) -- release module emits no startup diagnostics.
 assert(not PSMotion.play(nil,false,1,0))
 TEST.localPlayer=false;assert(not PSMotion.play(TEST.player,false,1,0));TEST.localPlayer=true
 for _,field in ipairs({'dead','vehicle','moving'}) do
@@ -55,7 +56,8 @@ tackle.action=TEST.native;tackle:start()
 assert(TEST.anim=='PS_BasicPushTackle' and TEST.block==false and TEST.bar==false)
 assert(math.abs(MOTION.facing.x-10.6)<.00001 and math.abs(MOTION.facing.y-20.8)<.00001)
 assert(MOTION.moving and MOTION.running) -- never stop or teleport the player
-assert(tackle.complete==nil) -- Diagnostic wrappers delegate native cleanup below.
+assert(tackle.complete==nil)
+assert(tackle.stop==ISBaseTimedAction.stop and tackle.perform==ISBaseTimedAction.perform)
 tackle:animEvent('AttackCollisionCheck','Shove')
 tackle:update();assert(not TEST.stopped)
 assert(not PSMotion.tackle(motionPlayer,1,0)) -- preserve existing queued action
@@ -112,12 +114,10 @@ MOTION={state='idle',localPlayer=true,time=1000};assert(PSMotion.fall(motionPlay
 MOTION.dead=true;PSMotion.updateFall(motionPlayer);assert(not MOTION.PS_SoccerFall)
 print('PASS isolated soccer-fall selection lifecycle and recovery cleanup')
 MOTION={state='idle',localPlayer=true};PSClient.selected=11;PSClient.blocked=function() return false end
-TEST.queue.queue={};TEST.error=nil;PSMotion.tackleDiagnosticCount=0;MOTION_LOGS={}
+TEST.queue.queue={};TEST.error=nil;MOTION_LOGS={}
+assert(PSMotion.tackleDiagnosticCount==nil)
 assert(PSMotion.tackle(motionPlayer,1,0))
-local diagnosticAction=TEST.queue.queue[1];diagnosticAction.action=TEST.native
-diagnosticAction:start();diagnosticAction:update();diagnosticAction:update();diagnosticAction:perform()
-assert(#MOTION_LOGS==4 and string.find(MOTION_LOGS[1],'queued') and string.find(MOTION_LOGS[2],'start')
-    and string.find(MOTION_LOGS[3],'update action=PS_BasicPushTackle') and string.find(MOTION_LOGS[4],'perform'))
-assert(string.find(MOTION_LOGS[1],'reason=-') and string.find(MOTION_LOGS[2],'reason=-'))
-for i=2,6 do assert(not PSMotion.tackle(motionPlayer,0,0)) end
-assert(#MOTION_LOGS==8) -- only first five attempts logged; no frame spam.
+local quietAction=TEST.queue.queue[1];quietAction.action=TEST.native
+quietAction:start();quietAction:update();quietAction:update();quietAction:perform()
+for i=1,6 do assert(not PSMotion.tackle(motionPlayer,0,0)) end
+assert(#MOTION_LOGS==0) -- release actions emit no diagnostic logs.
